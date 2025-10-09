@@ -4,7 +4,7 @@ use std::fmt::Formatter;
 use std::hash::Hash;
 
 fn main() {
-    let x = AtomicWordEquation::new(
+    let phi = AtomicWordEquation::new(
         "phi",
         vec![
             AtomicContent::FreeVariable("x"),
@@ -12,18 +12,24 @@ fn main() {
             AtomicContent::FreeVariable("y"),
         ],
     );
+    let rho = AtomicWordEquation::new("x", vec![AtomicContent::Constant("a")]);
+
+    let conj_form = ConjunctionWordEquation::new(Box::from(phi), Box::from(rho));
 
     let sub = HashMap::from([
         ("U", "aaaaaaaabbbb"),
-        ("x", ""),
+        ("x", "a"),
         ("y", "b"),
-        ("phi", "aaab"),
+        ("phi", "aaaab"),
     ]);
 
-    println!("Formula: {}", x);
-    println!("Free vars: {:?}", x.free_vars());
+    println!("Formula: {}", conj_form);
+    println!("Free vars: {:?}", conj_form.free_vars());
     println!("Substitution: {:?}", sub);
-    println!("Substitution holds: {:?}", x.check_substitution(&sub));
+    println!(
+        "Substitution holds: {:?}",
+        conj_form.check_substitution(&sub)
+    );
 }
 
 /// Assumes that the empty string is a factor of all words
@@ -70,6 +76,11 @@ fn substitute(equation: &Vec<AtomicContent>, substitution: &Substitution) -> Vec
     new_terms
 }
 
+trait WordEquation: fmt::Display {
+    fn free_vars(&self) -> Vec<&'static str>;
+    fn check_substitution(&self, substitution: &Substitution) -> bool;
+}
+
 /// x = abc
 /// abc is a vector of `AtomicContent` -- a sequence of either variables whose values
 /// can be provided by substitutions, or constants in the universe
@@ -86,7 +97,9 @@ impl AtomicWordEquation {
             rhs,
         }
     }
+}
 
+impl WordEquation for AtomicWordEquation {
     fn free_vars(&self) -> Vec<&'static str> {
         let mut free = vec![];
         if self.lhs_variable != "U" {
@@ -103,7 +116,7 @@ impl AtomicWordEquation {
 
     fn check_substitution(&self, substitution: &Substitution) -> bool {
         if !substitution.contains_key("U") {
-            panic!("Missing universe variable `U` in substitution")
+            panic!("Missing universe variable `U` (𝔲) in substitution")
         }
         println!("σ(U)={:?}", substitution["U"]);
         let universe = generate_factors(substitution["U"]);
@@ -126,7 +139,7 @@ impl AtomicWordEquation {
 
 impl fmt::Display for AtomicWordEquation {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}=", self.lhs_variable).expect("TODO: panic message");
+        write!(f, "{}≐", self.lhs_variable).expect("TODO: panic message");
         for content in &self.rhs {
             match content {
                 AtomicContent::FreeVariable(v) => {
@@ -137,6 +150,40 @@ impl fmt::Display for AtomicWordEquation {
                 }
             }
         }
+        Ok(())
+    }
+}
+
+/// φ∧ψ
+struct ConjunctionWordEquation {
+    lhs: Box<dyn WordEquation>,
+    rhs: Box<dyn WordEquation>,
+}
+impl ConjunctionWordEquation {
+    fn new(lhs: Box<dyn WordEquation>, rhs: Box<dyn WordEquation>) -> ConjunctionWordEquation {
+        ConjunctionWordEquation { lhs, rhs }
+    }
+}
+
+impl WordEquation for ConjunctionWordEquation {
+    fn free_vars(&self) -> Vec<&'static str> {
+        let mut free = vec![];
+        free.extend(self.lhs.free_vars());
+        free.extend(self.rhs.free_vars());
+
+        free
+    }
+
+    fn check_substitution(&self, substitution: &Substitution) -> bool {
+        // check substitution holds for lhs and rhs. Contradictions?
+        self.lhs.check_substitution(substitution) && self.rhs.check_substitution(substitution)
+    }
+}
+
+impl fmt::Display for ConjunctionWordEquation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "({} ∧ {})", self.lhs, self.rhs).expect("TODO: panic message");
+
         Ok(())
     }
 }
