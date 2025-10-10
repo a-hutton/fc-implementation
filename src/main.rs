@@ -8,13 +8,14 @@ fn main() {
         "phi",
         vec![
             AtomicContent::FreeVariable("x"),
-            AtomicContent::Constant("aaa"),
+            AtomicContent::Constant("aa"),
             AtomicContent::FreeVariable("y"),
         ],
     );
     let rho = AtomicWordEquation::new("x", vec![AtomicContent::Constant("a")]);
 
-    let conj_form = ConjunctionWordEquation::new(Box::from(phi), Box::from(rho));
+    let phi_neg = NegatedEquation::new(phi);
+    let conj_form = ConjunctionWordEquation::new(Box::from(phi_neg), Box::from(rho));
 
     let sub = HashMap::from([
         ("U", "aaaaaaaabbbb"),
@@ -82,7 +83,7 @@ trait WordEquation: fmt::Display {
 }
 
 /// x = abc
-/// abc is a vector of `AtomicContent` -- a sequence of either variables whose values
+/// abc is a vector of [`AtomicContent`] -- a sequence of either variables whose values
 /// can be provided by substitutions, or constants in the universe
 #[derive(Debug)]
 struct AtomicWordEquation {
@@ -183,7 +184,33 @@ impl WordEquation for ConjunctionWordEquation {
 impl fmt::Display for ConjunctionWordEquation {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "({} ∧ {})", self.lhs, self.rhs).expect("TODO: panic message");
-
         Ok(())
+    }
+}
+
+struct NegatedEquation {
+    inner: AtomicWordEquation,
+}
+
+impl NegatedEquation {
+    fn new(inner: AtomicWordEquation) -> NegatedEquation {
+        NegatedEquation { inner }
+    }
+}
+
+impl WordEquation for NegatedEquation {
+    fn free_vars(&self) -> Vec<&'static str> {
+        self.inner.free_vars()
+    }
+
+    fn check_substitution(&self, substitution: &Substitution) -> bool {
+        !self.inner.check_substitution(substitution)
+    }
+}
+
+impl fmt::Display for NegatedEquation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "¬").expect("TODO: panic message");
+        self.inner.fmt(f)
     }
 }
