@@ -40,7 +40,10 @@ pub enum AtomicContent<'a> {
     Constant(&'a str),
 }
 
-fn substitute<'a>(equation: &Vec<AtomicContent<'a>>, substitution: &Substitution) -> Vec<&'a str> {
+fn substitute<'a>(
+    equation: &Vec<AtomicContent<'a>>,
+    substitution: &Substitution<'a>,
+) -> Vec<&'a str> {
     let mut new_terms = Vec::with_capacity(equation.len());
     for term in equation {
         match term {
@@ -59,8 +62,8 @@ fn substitute<'a>(equation: &Vec<AtomicContent<'a>>, substitution: &Substitution
     new_terms
 }
 
-pub trait WordEquation<'b>: fmt::Display + fmt::Debug {
-    fn free_vars(&self) -> Vec<&'b str>;
+pub trait WordEquation: fmt::Display + fmt::Debug {
+    fn free_vars(&self) -> Vec<&str>;
     fn check_substitution(&self, substitution: &Substitution) -> bool;
 }
 
@@ -82,7 +85,7 @@ impl AtomicWordEquation<'_> {
     }
 }
 
-impl<'a> WordEquation<'a> for AtomicWordEquation<'a> {
+impl<'a> WordEquation for AtomicWordEquation<'a> {
     fn free_vars(&self) -> Vec<&'a str> {
         let mut free = vec![];
         if self.lhs_variable != "U" {
@@ -91,7 +94,9 @@ impl<'a> WordEquation<'a> for AtomicWordEquation<'a> {
 
         for content in &self.rhs {
             if let AtomicContent::FreeVariable(var) = content {
-                free.push(var);
+                if !free.contains(var) {
+                    free.push(*var);
+                }
             }
         }
         free
@@ -101,7 +106,6 @@ impl<'a> WordEquation<'a> for AtomicWordEquation<'a> {
         if !substitution.contains_key("U") {
             panic!("Missing universe variable `U` (𝔲) in substitution")
         }
-        println!("σ(U)={:?}", substitution["U"]);
         let universe = generate_factors(substitution["U"]);
         for (key, val) in substitution.iter() {
             if !universe.contains(val) {
@@ -126,10 +130,10 @@ impl fmt::Display for AtomicWordEquation<'_> {
         for content in &self.rhs {
             match content {
                 AtomicContent::FreeVariable(v) => {
-                    write!(f, "{}", v).expect("TODO: panic message");
+                    write!(f, "{} ", v).expect("TODO: panic message");
                 }
                 AtomicContent::Constant(c) => {
-                    write!(f, "{:?}", c).expect("TODO: panic message");
+                    write!(f, "{:?} ", c).expect("TODO: panic message");
                 }
             }
         }
@@ -140,23 +144,27 @@ impl fmt::Display for AtomicWordEquation<'_> {
 /// φ∧ψ
 #[derive(Debug)]
 pub struct ConjunctionWordEquation<'a> {
-    lhs: Box<dyn WordEquation<'a>>,
-    rhs: Box<dyn WordEquation<'a>>,
+    lhs: Box<dyn WordEquation + 'a>,
+    rhs: Box<dyn WordEquation + 'a>,
 }
-impl<'a> ConjunctionWordEquation<'a> {
-    pub fn new(
-        lhs: Box<dyn WordEquation<'a>>,
-        rhs: Box<dyn WordEquation<'a>>,
+impl ConjunctionWordEquation<'_> {
+    pub fn new<'a>(
+        lhs: Box<dyn WordEquation + 'a>,
+        rhs: Box<dyn WordEquation + 'a>,
     ) -> ConjunctionWordEquation<'a> {
         ConjunctionWordEquation { lhs, rhs }
     }
 }
 
-impl<'a> WordEquation<'a> for ConjunctionWordEquation<'a> {
-    fn free_vars(&self) -> Vec<&'a str> {
+impl WordEquation for ConjunctionWordEquation<'_> {
+    fn free_vars(&self) -> Vec<&str> {
         let mut free = vec![];
         free.extend(self.lhs.free_vars());
-        free.extend(self.rhs.free_vars());
+        for var in self.rhs.free_vars() {
+            if !free.contains(&var) {
+                free.push(var);
+            }
+        }
 
         free
     }
@@ -167,7 +175,7 @@ impl<'a> WordEquation<'a> for ConjunctionWordEquation<'a> {
     }
 }
 
-impl fmt::Display for ConjunctionWordEquation<'_> {
+impl<'a> fmt::Display for ConjunctionWordEquation<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "({} ∧ {})", self.lhs, self.rhs).expect("TODO: panic message");
         Ok(())
@@ -185,8 +193,8 @@ impl NegatedEquation<'_> {
     }
 }
 
-impl<'a> WordEquation<'a> for NegatedEquation<'a> {
-    fn free_vars(&self) -> Vec<&'a str> {
+impl WordEquation for NegatedEquation<'_> {
+    fn free_vars(&self) -> Vec<&str> {
         self.inner.free_vars()
     }
 

@@ -1,0 +1,10 @@
+word_equation = { atomic | neg_atomic | conjunctive_equation }
+
+atomic = {variable ~ "=" ~ (constant | variable)+}
+neg_atomic = {"¬" ~ atomic}
+conjunctive_equation = {"(" ~ word_equation ~ "&&" ~ word_equation ~ ")"}
+
+constant = {"\"" ~ ASCII_ALPHANUMERIC* ~ "\""}
+variable = @{ASCII_ALPHA ~ (ASCII_ALPHANUMERIC)*} // atomic rule - no whitespace at separator
+
+WHITESPACE = _{ " " } // Special rule name
