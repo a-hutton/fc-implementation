@@ -35,17 +35,14 @@ pub fn parse_word_equation(eq: &str) -> Option<Box<dyn WordEquation + '_>> {
         match equation.as_rule() {
             Rule::atomic => {
                 let atomic = parse_atomic_equation(&mut equation.into_inner());
-                println!("{:#?}", atomic);
                 Some(Box::from(atomic))
             }
             Rule::neg_atomic => {
                 let neg_atomic = parse_negated_equation(&mut equation.into_inner());
-                println!("{:#?}", neg_atomic);
                 Some(Box::from(neg_atomic))
             }
             Rule::conjunctive_equation => {
                 let conj = parse_conjunctive_equation(&mut equation.into_inner());
-                println!("{:#?}", conj);
                 Some(Box::from(conj))
             }
             _ => panic!("Expected an equation: {:#?}", equation),
@@ -56,6 +53,7 @@ pub fn parse_word_equation(eq: &str) -> Option<Box<dyn WordEquation + '_>> {
     }
 }
 
+#[cfg(test)]
 #[test]
 fn test_equation_parse_creator() {
     let test_cases = [

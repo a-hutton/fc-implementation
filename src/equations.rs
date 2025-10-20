@@ -93,6 +93,7 @@ impl<'a> WordEquation for AtomicWordEquation<'a> {
         }
 
         for content in &self.rhs {
+            // if term is a variable (not a constant), add to vec if not already there
             if let AtomicContent::FreeVariable(var) = content {
                 if !free.contains(var) && *var != "U" {
                     free.push(*var);
@@ -177,7 +178,7 @@ impl WordEquation for ConjunctionWordEquation<'_> {
     }
 }
 
-impl<'a> fmt::Display for ConjunctionWordEquation<'_> {
+impl fmt::Display for ConjunctionWordEquation<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "({} ∧ {})", self.lhs, self.rhs).expect("TODO: panic message");
         Ok(())

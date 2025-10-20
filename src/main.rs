@@ -1,30 +1,38 @@
 mod equation_parser;
 mod equations;
 
+use crate::equations::WordEquation;
 use itertools::Itertools;
 use std::collections::HashMap;
 
 fn main() {
-    find_solutions(r#"(x=y "b" && ¬y="")"#, "aab");
+    // find_solutions(r#"(x=y "b" && ¬y="")"#, "aab");
+    let _ = find_solutions(
+        &*equation_parser::parse_word_equation(r#"(x=y "b" && ¬y="")"#).unwrap(),
+        "aab",
+    );
 }
 
-fn find_solutions(equation: &str, word: &str) {
-    let equation = crate::equation_parser::parse_word_equation(equation).unwrap();
+fn find_solutions<'a>(equation: &'a dyn WordEquation, word: &'a str) -> Vec<Substitution<'a>> {
     let free_vars = equation.free_vars();
-    let subs = all_possible_substitutions(free_vars, word);
-    for sub in subs {
-        if equation.check_substitution(&sub) {
-            // println!("Valid solution: {:?}", sub);
-            print_solution(sub)
-        }
-    }
+    let all_subs = all_possible_substitutions(free_vars, word);
+    all_subs
+        .iter()
+        .filter(|sub| equation.check_substitution(sub))
+        .cloned()
+        .collect()
 }
 
-fn print_solution(sub: Substitution) {
+fn print_solution(sub: &Substitution) {
     let mut keys = sub.keys().collect::<Vec<_>>();
     keys.sort();
-    for key in keys {
-        print!("{} {}    ", key, sub[key]);
+    // guaranteed to be the longest variable, helps for printing as a 'table'
+    let universe_len = sub["U"].len();
+    for (i, key) in keys.iter().enumerate() {
+        print!("{}: {:width$}", key, sub[**key], width = universe_len);
+        if i < keys.len() - 1 {
+            print!(" | ")
+        }
     }
 
     println!()
@@ -69,9 +77,133 @@ fn all_possible_substitutions<'a>(var_names: Vec<&'a str>, w: &'a str) -> Vec<Su
     substitutions
 }
 
-#[test]
-fn test_all_subs() {
-    let subs = all_possible_substitutions(vec!["x", "y", "z"], "abcd");
-    println!("{:?}", subs);
-    assert!(true);
+#[cfg(test)]
+mod test {
+    use crate::equation_parser::parse_word_equation;
+    use crate::{find_solutions, print_solution};
+
+    #[derive(Copy, Clone)]
+    struct TestRes {
+        equation: &'static str,
+        universe: &'static str,
+        should_fail: bool,
+        num_solutions: usize,
+    }
+
+    static CASES: [TestRes; 15] = [
+        // Finding correct number of solutions
+        TestRes {
+            equation: r#"x = "a" y z"#,
+            universe: "aaab",
+            should_fail: false,
+            num_solutions: 15,
+        },
+        TestRes {
+            equation: r#"(x = "a" y z && (¬y="" && ¬z=""))"#,
+            universe: "aaab",
+            should_fail: false,
+            num_solutions: 4,
+        },
+        TestRes {
+            equation: r#"U="aaa""#,
+            universe: "aaa",
+            should_fail: false,
+            num_solutions: 1,
+        },
+        TestRes {
+            equation: r#"(U=x y && (x="a" && y=x))"#,
+            universe: "aa",
+            should_fail: false,
+            num_solutions: 1,
+        },
+        TestRes {
+            equation: r#"(U=x y && U=x)"#,
+            universe: "aa",
+            should_fail: false,
+            num_solutions: 1,
+        },
+        TestRes {
+            equation: r#"(U = "a" y z &&  z="b")"#,
+            universe: "aaab",
+            should_fail: false,
+            num_solutions: 1,
+        },
+        TestRes {
+            equation: r#"(x = "a" y z && (x=U && z="b"))"#,
+            universe: "aaab",
+            should_fail: false,
+            num_solutions: 1,
+        },
+        // variables with names in alphabet
+        TestRes {
+            equation: r#"(a="b"b && b="a")"#,
+            universe: "ba",
+            should_fail: false,
+            num_solutions: 1,
+        },
+        // Syntax Errors
+        TestRes {
+            equation: r#"(x = "a" y z && (x=U && z="b")"#,
+            universe: "aaab",
+            should_fail: true,
+            num_solutions: 0,
+        },
+        TestRes {
+            equation: r#"x = "ayz"#,
+            universe: "aaab",
+            should_fail: true,
+            num_solutions: 0,
+        },
+        TestRes {
+            equation: r#"a y z"#,
+            universe: "aaab",
+            should_fail: true,
+            num_solutions: 0,
+        },
+        TestRes {
+            equation: r#"x y = a b "#,
+            universe: "aaab",
+            should_fail: true,
+            num_solutions: 0,
+        },
+        // No matches
+        TestRes {
+            equation: r#"¬U=U"#,
+            universe: "aaaaa",
+            should_fail: false,
+            num_solutions: 0,
+        },
+        TestRes {
+            equation: r#"x=x"a""#,
+            universe: "aaaaa",
+            should_fail: false,
+            num_solutions: 0,
+        },
+        TestRes {
+            equation: r#"(x=y"aaa" && y="b")"#,
+            universe: "aaaaa",
+            should_fail: false,
+            num_solutions: 0,
+        },
+    ];
+
+    #[test]
+    fn test_solutions() {
+        for test in CASES {
+            println!("Finding solutions for '{}'", test.equation);
+            let res = parse_word_equation(test.equation);
+            match res {
+                None => assert!(test.should_fail),
+                Some(equation) => {
+                    let solutions = find_solutions(&*equation, test.universe);
+                    println!("Found {n} solutions", n = solutions.len());
+                    for sol in solutions.iter() {
+                        print_solution(sol);
+                    }
+                    assert_eq!(solutions.len(), test.num_solutions);
+                }
+            }
+            println!("-------- Test Passed --------\n")
+        }
+    }
 }
