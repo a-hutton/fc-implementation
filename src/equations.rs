@@ -94,7 +94,7 @@ impl<'a> WordEquation for AtomicWordEquation<'a> {
 
         for content in &self.rhs {
             if let AtomicContent::FreeVariable(var) = content {
-                if !free.contains(var) {
+                if !free.contains(var) && *var != "U" {
                     free.push(*var);
                 }
             }
@@ -171,7 +171,9 @@ impl WordEquation for ConjunctionWordEquation<'_> {
 
     fn check_substitution(&self, substitution: &Substitution) -> bool {
         // check substitution holds for lhs and rhs. Contradictions?
-        self.lhs.check_substitution(substitution) && self.rhs.check_substitution(substitution)
+        let lhs_holds = self.lhs.check_substitution(substitution);
+        let rhs_holds = self.rhs.check_substitution(substitution);
+        lhs_holds && rhs_holds
     }
 }
 
