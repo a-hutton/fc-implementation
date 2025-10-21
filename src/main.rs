@@ -83,120 +83,138 @@ mod test {
     use crate::{find_solutions, print_solution};
 
     #[derive(Copy, Clone)]
-    struct TestRes {
+    struct SolutionTestCase {
         equation: &'static str,
         universe: &'static str,
         should_fail: bool,
         num_solutions: usize,
     }
 
-    static CASES: [TestRes; 16] = [
-        // Finding correct number of solutions
-        TestRes {
-            equation: r#"x = "a" y z"#,
-            universe: "aaab",
-            should_fail: false,
-            num_solutions: 15,
-        },
-        TestRes {
-            equation: r#"(x = "a" y z && (¬y="" && ¬z=""))"#,
-            universe: "aaab",
-            should_fail: false,
-            num_solutions: 4,
-        },
-        TestRes {
-            equation: r#"U="aaa""#,
-            universe: "aaa",
-            should_fail: false,
-            num_solutions: 1,
-        },
-        TestRes {
-            equation: r#"(U=x y && (x="a" && y=x))"#,
-            universe: "aa",
-            should_fail: false,
-            num_solutions: 1,
-        },
-        TestRes {
-            equation: r#"(U=x y && U=x)"#,
-            universe: "aa",
-            should_fail: false,
-            num_solutions: 1,
-        },
-        TestRes {
-            equation: r#"(U = "a" y z &&  z="b")"#,
-            universe: "aaab",
-            should_fail: false,
-            num_solutions: 1,
-        },
-        TestRes {
-            equation: r#"(x = "a" y z && (x=U && z="b"))"#,
-            universe: "aaab",
-            should_fail: false,
-            num_solutions: 1,
-        },
-        // remove duplicate factors from universe
-        TestRes {
-            equation: r#"x="aa""#,
-            universe: "aaaaaaa",
-            should_fail: false,
-            num_solutions: 1,
-        },
-        // variables with names in alphabet
-        TestRes {
-            equation: r#"(a="b"b && b="a")"#,
-            universe: "ba",
-            should_fail: false,
-            num_solutions: 1,
-        },
-        // Syntax Errors
-        TestRes {
-            equation: r#"(x = "a" y z && (x=U && z="b")"#,
-            universe: "aaab",
-            should_fail: true,
-            num_solutions: 0,
-        },
-        TestRes {
-            equation: r#"x = "ayz"#,
-            universe: "aaab",
-            should_fail: true,
-            num_solutions: 0,
-        },
-        TestRes {
-            equation: r#"a y z"#,
-            universe: "aaab",
-            should_fail: true,
-            num_solutions: 0,
-        },
-        TestRes {
-            equation: r#"x y = a b "#,
-            universe: "aaab",
-            should_fail: true,
-            num_solutions: 0,
-        },
-        // No matches
-        TestRes {
-            equation: r#"¬U=U"#,
-            universe: "aaaaa",
-            should_fail: false,
-            num_solutions: 0,
-        },
-        TestRes {
-            equation: r#"x=x"a""#,
-            universe: "aaaaa",
-            should_fail: false,
-            num_solutions: 0,
-        },
-        TestRes {
-            equation: r#"(x=y"aaa" && y="b")"#,
-            universe: "aaaaa",
-            should_fail: false,
-            num_solutions: 0,
-        },
-    ];
-
     #[test]
     fn test_solutions() {
-        for test in CASES {
+        let cases = [
+            // Finding correct number of solutions
+            SolutionTestCase {
+                equation: r#"x = "a" y z"#,
+                universe: "aaab",
+                should_fail: false,
+                num_solutions: 15,
+            },
+            SolutionTestCase {
+                equation: r#"(x = "a" y z && (¬y="" && ¬z=""))"#,
+                universe: "aaab",
+                should_fail: false,
+                num_solutions: 4,
+            },
+            SolutionTestCase {
+                equation: r#"U="aaa""#,
+                universe: "aaa",
+                should_fail: false,
+                num_solutions: 1,
+            },
+            SolutionTestCase {
+                equation: r#"(U=x y && (x="a" && y=x))"#,
+                universe: "aa",
+                should_fail: false,
+                num_solutions: 1,
+            },
+            SolutionTestCase {
+                equation: r#"(U=x y && U=x)"#,
+                universe: "aa",
+                should_fail: false,
+                num_solutions: 1,
+            },
+            SolutionTestCase {
+                equation: r#"(U = "a" y z &&  z="b")"#,
+                universe: "aaab",
+                should_fail: false,
+                num_solutions: 1,
+            },
+            SolutionTestCase {
+                equation: r#"(x = "a" y z && (x=U && z="b"))"#,
+                universe: "aaab",
+                should_fail: false,
+                num_solutions: 1,
+            },
+            // Existential Quantifier
+            SolutionTestCase {
+                equation: r#"∃ x(U=x x)"#,
+                universe: "abbabb",
+                should_fail: false,
+                num_solutions: 1,
+            },
+            SolutionTestCase {
+                equation: r#"∃ x(U=x x)"#,
+                universe: "abbcabb",
+                should_fail: false,
+                num_solutions: 0,
+            },
+            // remove duplicate factors from universe
+            SolutionTestCase {
+                equation: r#"x="aa""#,
+                universe: "aaaaaaa",
+                should_fail: false,
+                num_solutions: 1,
+            },
+            SolutionTestCase {
+                equation: r#"U=U"#,
+                universe: "aaaaa",
+                should_fail: true,
+                num_solutions: 1,
+            },
+            // variables with names in alphabet
+            SolutionTestCase {
+                equation: r#"(a="b"b && b="a")"#,
+                universe: "ba",
+                should_fail: false,
+                num_solutions: 1,
+            },
+            // Syntax Errors
+            SolutionTestCase {
+                equation: r#"(x = "a" y z && (x=U && z="b")"#,
+                universe: "aaab",
+                should_fail: true,
+                num_solutions: 0,
+            },
+            SolutionTestCase {
+                equation: r#"x = "ayz"#,
+                universe: "aaab",
+                should_fail: true,
+                num_solutions: 0,
+            },
+            SolutionTestCase {
+                equation: r#"a y z"#,
+                universe: "aaab",
+                should_fail: true,
+                num_solutions: 0,
+            },
+            SolutionTestCase {
+                equation: r#"x y = a b "#,
+                universe: "aaab",
+                should_fail: true,
+                num_solutions: 0,
+            },
+            // No matches
+            SolutionTestCase {
+                equation: r#"¬U=U"#,
+                universe: "aaaaa",
+                should_fail: false,
+                num_solutions: 0,
+            },
+            SolutionTestCase {
+                equation: r#"x=x"a""#,
+                universe: "aaaaa",
+                should_fail: false,
+                num_solutions: 0,
+            },
+            SolutionTestCase {
+                equation: r#"(x=y"aaa" && y="b")"#,
+                universe: "aaaaa",
+                should_fail: false,
+                num_solutions: 0,
+            },
+        ];
+        for test in cases {
             println!("Finding solutions for '{}'", test.equation);
             let res = parse_word_equation(test.equation);
             match res {
@@ -211,6 +229,32 @@ mod test {
                 }
             }
             println!("-------- Test Passed --------\n")
+        }
+    }
+
+    struct FreeVarTestCase {
+        equation: &'static str,
+        free_vars: Vec<&'static str>,
+    }
+
+    #[test]
+    fn test_free_vars() {
+        let cases = [
+            FreeVarTestCase {
+                equation: "x = a b c",
+                free_vars: vec!["a", "b", "c", "x"],
+            },
+            FreeVarTestCase {
+                equation: "exists x(y=x)",
+                free_vars: vec!["y"],
+            },
+        ];
+
+        for test in cases {
+            let eq = parse_word_equation(test.equation).unwrap();
+            let mut got_vars = eq.free_vars();
+            got_vars.sort();
+            assert_eq!(got_vars, test.free_vars)
         }
     }
 }

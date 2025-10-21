@@ -1,38 +1,6 @@
 use crate::{generate_factors, Substitution};
-use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Formatter;
-
-#[test]
-fn test_manual_eqs() {
-    let phi = AtomicWordEquation::new(
-        "phi",
-        vec![
-            AtomicContent::FreeVariable("x"),
-            AtomicContent::Constant("aa"),
-            AtomicContent::FreeVariable("y"),
-        ],
-    );
-    let rho = AtomicWordEquation::new("x", vec![AtomicContent::Constant("a")]);
-
-    let phi_neg = NegatedEquation::new(phi);
-    let conj_form = ConjunctionWordEquation::new(Box::from(phi_neg), Box::from(rho));
-
-    let sub = HashMap::from([
-        ("U", "aaaaaaaabbbb"),
-        ("x", "a"),
-        ("y", "b"),
-        ("phi", "aaaab"),
-    ]);
-
-    println!("Formula: {}", conj_form);
-    println!("Free vars: {:?}", conj_form.free_vars());
-    println!("Substitution: {:?}", sub);
-    println!(
-        "Substitution holds: {:?}",
-        conj_form.check_substitution(&sub)
-    );
-}
 
 #[derive(Debug, Hash)]
 pub enum AtomicContent<'a> {
@@ -49,7 +17,7 @@ fn substitute<'a>(
         match term {
             AtomicContent::FreeVariable(v) => {
                 if !substitution.contains_key(v) {
-                    panic!("No substitution for variable {:?}", v);
+                    panic!("No substitution for (free) variable {:?}", v);
                 }
                 let val = substitution[*v];
                 new_terms.push(val);
@@ -93,11 +61,12 @@ impl<'a> WordEquation for AtomicWordEquation<'a> {
         }
 
         for content in &self.rhs {
-            // if term is a variable (not a constant), add to vec if not already there
-            if let AtomicContent::FreeVariable(var) = content {
-                if !free.contains(var) && *var != "U" {
-                    free.push(*var);
-                }
+            // if term is a free variable, add to vec if not already there
+            if let AtomicContent::FreeVariable(var) = content
+                && !free.contains(var)
+                && *var != "U"
+            {
+                free.push(*var);
             }
         }
         free
@@ -210,5 +179,60 @@ impl fmt::Display for NegatedEquation<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "¬").expect("TODO: panic message");
         self.inner.fmt(f)
+    }
+}
+
+#[derive(Debug)]
+pub struct ExistentialEquation<'a> {
+    inner: Box<dyn WordEquation + 'a>,
+    bound_var: &'a str,
+}
+
+impl<'a> ExistentialEquation<'a> {
+    pub fn new(bound_var: &'a str, inner_equation: Box<dyn WordEquation + 'a>) -> Self {
+        ExistentialEquation {
+            inner: inner_equation,
+            bound_var,
+        }
+    }
+}
+
+impl WordEquation for ExistentialEquation<'_> {
+    fn free_vars(&self) -> Vec<&str> {
+        let inner_free = self.inner.free_vars();
+        let mut free = Vec::with_capacity(inner_free.len());
+        for var in inner_free {
+            if var != self.bound_var {
+                free.push(var);
+            }
+        }
+        free
+    }
+
+    fn check_substitution(&self, substitution: &Substitution) -> bool {
+        let universe_word = substitution["U"];
+        let all_factors = generate_factors(universe_word);
+        let mut altered_substitution = substitution.clone();
+        for factor in all_factors {
+            altered_substitution.insert(self.bound_var, factor);
+            let holds = self.inner.check_substitution(&altered_substitution);
+            if holds {
+                println!(
+                    "Substitution {x}={val} exists and holds",
+                    x = self.bound_var,
+                    val = factor
+                );
+                return true;
+            }
+        }
+        false
+    }
+}
+
+impl fmt::Display for ExistentialEquation<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let _ = write!(f, "∃{x}: (", x = self.bound_var);
+        let _ = self.inner.fmt(f);
+        write!(f, ")")
     }
 }
