@@ -90,7 +90,7 @@ mod test {
         num_solutions: usize,
     }
 
-    static CASES: [TestRes; 15] = [
+    static CASES: [TestRes; 16] = [
         // Finding correct number of solutions
         TestRes {
             equation: r#"x = "a" y z"#,
@@ -131,6 +131,13 @@ mod test {
         TestRes {
             equation: r#"(x = "a" y z && (x=U && z="b"))"#,
             universe: "aaab",
+            should_fail: false,
+            num_solutions: 1,
+        },
+        // remove duplicate factors from universe
+        TestRes {
+            equation: r#"x="aa""#,
+            universe: "aaaaaaa",
             should_fail: false,
             num_solutions: 1,
         },
