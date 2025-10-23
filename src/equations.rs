@@ -135,7 +135,6 @@ impl WordEquation for ConjunctionWordEquation<'_> {
                 free.push(var);
             }
         }
-
         free
     }
 
@@ -149,8 +148,48 @@ impl WordEquation for ConjunctionWordEquation<'_> {
 
 impl fmt::Display for ConjunctionWordEquation<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "({} ∧ {})", self.lhs, self.rhs).expect("TODO: panic message");
-        Ok(())
+        write!(f, "({} ∧ {})", self.lhs, self.rhs)
+    }
+}
+
+/// φ∧ψ
+#[derive(Debug)]
+pub struct DisjunctionWordEquation<'a> {
+    lhs: Box<dyn WordEquation + 'a>,
+    rhs: Box<dyn WordEquation + 'a>,
+}
+impl DisjunctionWordEquation<'_> {
+    pub fn new<'a>(
+        lhs: Box<dyn WordEquation + 'a>,
+        rhs: Box<dyn WordEquation + 'a>,
+    ) -> DisjunctionWordEquation<'a> {
+        DisjunctionWordEquation { lhs, rhs }
+    }
+}
+
+impl WordEquation for DisjunctionWordEquation<'_> {
+    fn free_vars(&self) -> Vec<&str> {
+        let mut free = vec![];
+        free.extend(self.lhs.free_vars());
+        for var in self.rhs.free_vars() {
+            if !free.contains(&var) {
+                free.push(var);
+            }
+        }
+        free
+    }
+
+    fn check_substitution(&self, substitution: &Substitution) -> bool {
+        // check substitution holds for lhs and rhs. Contradictions?
+        let lhs_holds = self.lhs.check_substitution(substitution);
+        let rhs_holds = self.rhs.check_substitution(substitution);
+        lhs_holds || rhs_holds
+    }
+}
+
+impl fmt::Display for DisjunctionWordEquation<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "({} ∨ {})", self.lhs, self.rhs)
     }
 }
 

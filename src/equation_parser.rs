@@ -1,7 +1,6 @@
-use crate::equation_parser;
 use crate::equations::{
-    AtomicContent, AtomicWordEquation, ConjunctionWordEquation, ExistentialEquation,
-    NegatedEquation, WordEquation,
+    AtomicContent, AtomicWordEquation, ConjunctionWordEquation, DisjunctionWordEquation,
+    ExistentialEquation, NegatedEquation, WordEquation,
 };
 use pest::iterators::{Pair, Pairs};
 use pest::Parser;
@@ -45,6 +44,10 @@ pub fn parse_word_equation(eq: &str) -> Option<Box<dyn WordEquation + '_>> {
             Rule::conjunctive_equation => {
                 let conj = parse_conjunctive_equation(&mut equation.into_inner());
                 Some(Box::from(conj))
+            }
+            Rule::disjunctive_equation => {
+                let disj = parse_disjunctive_equation(&mut equation.into_inner());
+                Some(Box::from(disj))
             }
             Rule::existential_equation => {
                 let exists = parse_existential_equation(&mut equation.into_inner());
@@ -104,9 +107,7 @@ fn parse_negated_equation<'a>(eq: &mut Pairs<'a, Rule>) -> NegatedEquation<'a> {
     NegatedEquation::new(atomic_eq)
 }
 
-fn parse_conjunctive_equation<'a>(
-    eq: &mut pest::iterators::Pairs<'a, equation_parser::Rule>,
-) -> ConjunctionWordEquation<'a> {
+fn parse_conjunctive_equation<'a>(eq: &mut Pairs<'a, Rule>) -> ConjunctionWordEquation<'a> {
     let lhs_eq = eq.next().unwrap();
     if lhs_eq.as_rule() != Rule::word_equation {
         panic!(
@@ -131,6 +132,33 @@ fn parse_conjunctive_equation<'a>(
     let rhs = parse_equation_pair(rhs_eq);
 
     ConjunctionWordEquation::new(lhs, rhs)
+}
+
+fn parse_disjunctive_equation<'a>(eq: &mut Pairs<'a, Rule>) -> DisjunctionWordEquation<'a> {
+    let lhs_eq = eq.next().unwrap();
+    if lhs_eq.as_rule() != Rule::word_equation {
+        panic!(
+            "Parse error on disjunctive equation. Expected a word equation, got {:?}\n{:?}",
+            lhs_eq.as_rule(),
+            lhs_eq
+        )
+    }
+    let lhs_eq = lhs_eq.into_inner().next().unwrap();
+
+    let rhs_eq = eq.next().unwrap();
+    if rhs_eq.as_rule() != Rule::word_equation {
+        panic!(
+            "Parse error on disjunctive equation. Expected a word equation, got {:?}\n{:?}",
+            rhs_eq.as_rule(),
+            rhs_eq
+        )
+    }
+    let rhs_eq = rhs_eq.into_inner().next().unwrap();
+
+    let lhs = parse_equation_pair(lhs_eq);
+    let rhs = parse_equation_pair(rhs_eq);
+
+    DisjunctionWordEquation::new(lhs, rhs)
 }
 
 fn parse_existential_equation<'a>(eq: &mut Pairs<'a, Rule>) -> ExistentialEquation<'a> {

@@ -149,6 +149,12 @@ mod test {
                 should_fail: false,
                 num_solutions: 0,
             },
+            SolutionTestCase {
+                equation: r#"(X="a" || X="aa")"#,
+                universe: "aa",
+                should_fail: false,
+                num_solutions: 2,
+            },
             // remove duplicate factors from universe
             SolutionTestCase {
                 equation: r#"x="aa""#,
