@@ -167,7 +167,6 @@ fn parse_existential_equation<'a>(eq: &mut Pairs<'a, Rule>) -> ExistentialEquati
         panic!("Expected a variable to be bound in 'exists' clause")
     }
     let bound_variable = variable_pair.as_str();
-    println!("Bound variable name: {:?}", bound_variable);
 
     // 'inner' is the wrapping word_equation rule, so we go into that to get the equation type
     let inner = eq.next().unwrap().into_inner().next().unwrap();
@@ -183,6 +182,8 @@ fn parse_equation_pair<'a>(pair: Pair<'a, Rule>) -> Box<dyn WordEquation + 'a> {
         Rule::neg_atomic => Box::from(parse_negated_equation(&mut pair.into_inner())),
         Rule::atomic => Box::from(parse_atomic_equation(&mut pair.into_inner())),
         Rule::conjunctive_equation => Box::from(parse_conjunctive_equation(&mut pair.into_inner())),
+        Rule::disjunctive_equation => Box::from(parse_disjunctive_equation(&mut pair.into_inner())),
+        Rule::existential_equation => Box::from(parse_existential_equation(&mut pair.into_inner())),
 
         r => {
             panic!("Expected an equation type, round rule type {:?}", r);

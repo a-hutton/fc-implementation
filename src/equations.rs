@@ -256,11 +256,6 @@ impl WordEquation for ExistentialEquation<'_> {
             altered_substitution.insert(self.bound_var, factor);
             let holds = self.inner.check_substitution(&altered_substitution);
             if holds {
-                println!(
-                    "Substitution {x}={val} exists and holds",
-                    x = self.bound_var,
-                    val = factor
-                );
                 return true;
             }
         }
