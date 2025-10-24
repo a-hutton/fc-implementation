@@ -141,6 +141,12 @@ mod test {
                 should_fail: false,
                 num_solutions: 1,
             },
+            SolutionTestCase {
+                equation: r#"¬((x="" || x="ab") || (x="a" || x="b"))"#,
+                universe: "ab",
+                should_fail: false,
+                num_solutions: 0,
+            },
             // Existential Quantifier
             SolutionTestCase {
                 equation: r#"∃ x(U=x x)"#,

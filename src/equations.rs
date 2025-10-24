@@ -195,11 +195,11 @@ impl fmt::Display for DisjunctionWordEquation<'_> {
 
 #[derive(Debug)]
 pub struct NegatedEquation<'a> {
-    inner: AtomicWordEquation<'a>,
+    inner: Box<dyn WordEquation + 'a>,
 }
 
 impl NegatedEquation<'_> {
-    pub fn new(inner: AtomicWordEquation) -> NegatedEquation {
+    pub fn new<'a>(inner: Box<dyn WordEquation + 'a>) -> NegatedEquation {
         NegatedEquation { inner }
     }
 }

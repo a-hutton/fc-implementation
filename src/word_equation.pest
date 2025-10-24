@@ -1,7 +1,7 @@
 word_equation = { atomic | neg_atomic | conjunctive_equation | disjunctive_equation | existential_equation }
 
 atomic = {variable ~ "=" ~ (constant | variable)+}
-neg_atomic = {"¬" ~ atomic}
+neg_atomic = {"¬" ~ word_equation}
 conjunctive_equation = {"(" ~ word_equation ~ ("&&"|"∧") ~ word_equation ~ ")"}
 disjunctive_equation = {"(" ~ word_equation ~ ("||"|"∨") ~ word_equation ~ ")"}
 existential_equation = {("exists" | "∃") ~ variable ~ "(" ~ word_equation ~ ")"}

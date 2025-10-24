@@ -70,6 +70,7 @@ fn test_equation_parse_creator() {
         r#"¬x = "a" yqqq z"#,
         r#"(x=y"abc" && ¬y="")"#,
         r#"exists x (U=x x)"#,
+        r#"¬(x="aa"||x="bb")"#,
     ];
     for case in test_cases {
         let eq = parse_word_equation(case);
@@ -102,8 +103,8 @@ fn parse_atomic_equation<'a>(eq: &mut Pairs<'a, Rule>) -> AtomicWordEquation<'a>
 }
 
 fn parse_negated_equation<'a>(eq: &mut Pairs<'a, Rule>) -> NegatedEquation<'a> {
-    let mut inner = eq.next().unwrap().into_inner();
-    let atomic_eq = parse_atomic_equation(&mut inner);
+    let inner = eq.next().unwrap().into_inner().next().unwrap();
+    let atomic_eq = parse_equation_pair(inner);
     NegatedEquation::new(atomic_eq)
 }
 
