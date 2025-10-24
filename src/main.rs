@@ -29,7 +29,12 @@ fn print_solution(sub: &Substitution) {
     // guaranteed to be the longest variable, helps for printing as a 'table'
     let universe_len = sub["U"].len();
     for (i, key) in keys.iter().enumerate() {
-        print!("{}: {:width$}", key, sub[**key], width = universe_len);
+        let val = if sub[**key].is_empty() {
+            "ε"
+        } else {
+            sub[**key]
+        };
+        print!("{}: {:width$}", key, val, width = universe_len);
         if i < keys.len() - 1 {
             print!(" | ")
         }
@@ -220,6 +225,78 @@ mod test {
                 num_solutions: 0,
             },
         ];
+        for test in cases {
+            println!("Finding solutions for '{}'", test.equation);
+            let res = parse_word_equation(test.equation);
+            match res {
+                None => assert!(test.should_fail),
+                Some(equation) => {
+                    let solutions = find_solutions(&*equation, test.universe);
+                    println!("Found {n} solutions", n = solutions.len());
+                    for sol in solutions.iter() {
+                        print_solution(sol);
+                    }
+                    assert_eq!(solutions.len(), test.num_solutions);
+                }
+            }
+            println!("-------- Test Passed --------\n")
+        }
+    }
+
+    /// Test cases here are defined in the literature, to better fit 'real-world' use-cases
+    #[test]
+    fn tests_from_literature() {
+        let cases = [
+            // Theory of Concatenation over Finite Models - Section 1
+            // 'Return all factors that occur [at least] twice in w'
+            SolutionTestCase {
+                equation: r#"exists p1(exists p2(exists s1(exists s2(((U=p1 x s1 && U=p2 x s2)&&¬p1=p2)))))"#,
+                universe: "aabaab",
+                should_fail: false,
+                num_solutions: 6, // ε, a, b, aa, ab, aab
+            },
+            // Theory of Concatenation over Finite Models - Section 1
+            // 'Return all factors x that have two non-overlapping occurrences in w'
+            SolutionTestCase {
+                equation: r#"exists y(exists z(y=x z x))"#,
+                universe: "aabcbc",
+                should_fail: false,
+                num_solutions: 5, // ε, a, b, c, bc
+            },
+            // Theory of Concatenation over Finite Models - Example 3.5
+            // 'σ(y) must occur in w between papaya and banana' (1)
+            SolutionTestCase {
+                equation: r#"∃ x(x = "papaya" y "banana")"#,
+                universe: "papayayybanana",
+                should_fail: false,
+                num_solutions: 1, // yy
+            },
+            // Theory of Concatenation over Finite Models - Example 3.5
+            // 'σ(y) must occur in w between papaya and banana' (2)
+            SolutionTestCase {
+                equation: r#"∃ x(x = "papaya" y "banana")"#,
+                universe: "papayabannnnnnana",
+                should_fail: false,
+                num_solutions: 0,
+            },
+            // Theory of Concatenation over Finite Models - Example 3.5
+            // 'w must contain papaya or banana as a factor' (1)
+            SolutionTestCase {
+                equation: r#"∃ x((x = "papaya"  ∨ x = "banana"))"#,
+                universe: "papayabbbb",
+                should_fail: false,
+                num_solutions: 1, // papaya
+            },
+            // Theory of Concatenation over Finite Models - Example 3.5
+            // 'w must contain papaya or banana as a factor' (2)
+            SolutionTestCase {
+                equation: r#"∃ x((x = "papaya"  ∨ x = "banana"))"#,
+                universe: "bannnnnana",
+                should_fail: false,
+                num_solutions: 0,
+            },
+        ];
+
         for test in cases {
             println!("Finding solutions for '{}'", test.equation);
             let res = parse_word_equation(test.equation);
