@@ -301,6 +301,20 @@ mod test {
                 should_fail: false,
                 num_solutions: 0,
             },
+            // Theory of Concatenation over Finite Models - Example 3.5
+            // 'σ(x) occurs exactly once in w'
+            SolutionTestCase {
+                equation: r#"(x="bbb" && ∃ p(∃ s((U=p x s ∧ ¬∃ ph(∃ sh((U=ph x sh ∧ ¬ph=p)))))))"#,
+                universe: "ababbba",
+                should_fail: false,
+                num_solutions: 1,
+            },
+            SolutionTestCase {
+                equation: r#"(x="bbb" && ∃ p(∃ s((U=p x s ∧ ¬∃ ph(∃ sh((U=ph x sh ∧ ¬ph=p)))))))"#,
+                universe: "abb",
+                should_fail: false,
+                num_solutions: 0,
+            },
         ];
 
         for test in cases {
