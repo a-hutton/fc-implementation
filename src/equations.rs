@@ -270,3 +270,53 @@ impl fmt::Display for ExistentialEquation<'_> {
         write!(f, ")")
     }
 }
+
+#[derive(Debug)]
+pub struct UniversalEquation<'a> {
+    inner: Box<dyn WordEquation + 'a>,
+    bound_var: &'a str,
+}
+
+impl<'a> UniversalEquation<'a> {
+    pub fn new(bound_var: &'a str, inner_equation: Box<dyn WordEquation + 'a>) -> Self {
+        UniversalEquation {
+            inner: inner_equation,
+            bound_var,
+        }
+    }
+}
+
+impl WordEquation for UniversalEquation<'_> {
+    fn free_vars(&self) -> Vec<&str> {
+        let inner_free = self.inner.free_vars();
+        let mut free = Vec::with_capacity(inner_free.len());
+        for var in inner_free {
+            if var != self.bound_var {
+                free.push(var);
+            }
+        }
+        free
+    }
+
+    fn check_substitution(&self, substitution: &Substitution) -> bool {
+        let universe_word = substitution["U"];
+        let all_factors = generate_factors(universe_word);
+        let mut altered_substitution = substitution.clone();
+        for factor in all_factors {
+            altered_substitution.insert(self.bound_var, factor);
+            let holds = self.inner.check_substitution(&altered_substitution);
+            if holds {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+impl fmt::Display for UniversalEquation<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let _ = write!(f, "∀{x}: (", x = self.bound_var);
+        let _ = self.inner.fmt(f);
+        write!(f, ")")
+    }
+}

@@ -1,6 +1,6 @@
 use crate::equations::{
     AtomicContent, AtomicWordEquation, ConjunctionWordEquation, DisjunctionWordEquation,
-    ExistentialEquation, NegatedEquation, WordEquation,
+    ExistentialEquation, NegatedEquation, UniversalEquation, WordEquation,
 };
 use pest::iterators::{Pair, Pairs};
 use pest::Parser;
@@ -18,7 +18,7 @@ fn test_parser() {
         r#"(x=y"abc" && ¬y="m")"#,
     ];
     for case in test_cases {
-        let rules = WordEquationParser::parse(Rule::word_equation, &case)
+        let rules = WordEquationParser::parse(Rule::word_equation, case)
             .expect("should parse")
             .next()
             .unwrap();
@@ -32,29 +32,8 @@ pub fn parse_word_equation(eq: &str) -> Option<Box<dyn WordEquation + '_>> {
     if let Ok(mut equation) = res {
         let equation = equation.next().unwrap();
         let equation = equation.into_inner().next().unwrap();
-        match equation.as_rule() {
-            Rule::atomic => {
-                let atomic = parse_atomic_equation(&mut equation.into_inner());
-                Some(Box::from(atomic))
-            }
-            Rule::neg_atomic => {
-                let neg_atomic = parse_negated_equation(&mut equation.into_inner());
-                Some(Box::from(neg_atomic))
-            }
-            Rule::conjunctive_equation => {
-                let conj = parse_conjunctive_equation(&mut equation.into_inner());
-                Some(Box::from(conj))
-            }
-            Rule::disjunctive_equation => {
-                let disj = parse_disjunctive_equation(&mut equation.into_inner());
-                Some(Box::from(disj))
-            }
-            Rule::existential_equation => {
-                let exists = parse_existential_equation(&mut equation.into_inner());
-                Some(Box::from(exists))
-            }
-            _ => panic!("Expected an equation: {:#?}", equation),
-        }
+        let equation = parse_equation_pair(equation);
+        Some(equation)
     } else {
         eprintln!("Parse error on word equation\n{:?}", res);
         None
@@ -176,6 +155,20 @@ fn parse_existential_equation<'a>(eq: &mut Pairs<'a, Rule>) -> ExistentialEquati
     ExistentialEquation::new(bound_variable, inner_equation)
 }
 
+fn parse_universal_equation<'a>(eq: &mut Pairs<'a, Rule>) -> UniversalEquation<'a> {
+    let variable_pair = eq.next().unwrap();
+    if variable_pair.as_rule() != Rule::variable {
+        panic!("Expected a variable to be bound in 'exists' clause")
+    }
+    let bound_variable = variable_pair.as_str();
+
+    // 'inner' is the wrapping word_equation rule, so we go into that to get the equation type
+    let inner = eq.next().unwrap().into_inner().next().unwrap();
+    let inner_equation = parse_equation_pair(inner);
+
+    UniversalEquation::new(bound_variable, inner_equation)
+}
+
 /// Parse a pest `Pair` into a [`WordEquation`] `Box` pointer with the appropriate
 /// implementation of [`WordEquation`]
 fn parse_equation_pair<'a>(pair: Pair<'a, Rule>) -> Box<dyn WordEquation + 'a> {
@@ -185,6 +178,7 @@ fn parse_equation_pair<'a>(pair: Pair<'a, Rule>) -> Box<dyn WordEquation + 'a> {
         Rule::conjunctive_equation => Box::from(parse_conjunctive_equation(&mut pair.into_inner())),
         Rule::disjunctive_equation => Box::from(parse_disjunctive_equation(&mut pair.into_inner())),
         Rule::existential_equation => Box::from(parse_existential_equation(&mut pair.into_inner())),
+        Rule::universal_equation => Box::from(parse_universal_equation(&mut pair.into_inner())),
 
         r => {
             panic!("Expected an equation type, round rule type {:?}", r);

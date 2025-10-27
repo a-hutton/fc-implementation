@@ -166,6 +166,12 @@ mod test {
                 should_fail: false,
                 num_solutions: 2,
             },
+            SolutionTestCase {
+                equation: r#"forall x (x="a")"#,
+                universe: "aa",
+                should_fail: false,
+                num_solutions: 0,
+            },
             // remove duplicate factors from universe
             SolutionTestCase {
                 equation: r#"x="aa""#,
