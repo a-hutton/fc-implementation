@@ -1,8 +1,8 @@
-mod equation_parser;
-mod equations;
+mod formula;
+mod formula_parser;
 mod tests;
 
-use crate::equations::Formula;
+use crate::formula::Formula;
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::env;
@@ -17,7 +17,7 @@ fn main() {
     let search_pattern = search_pattern.unwrap();
     let universe = universe.unwrap();
 
-    let parsed_formula = equation_parser::parse_formula_str(search_pattern.as_str());
+    let parsed_formula = formula_parser::parse_formula_str(search_pattern.as_str());
     if parsed_formula.is_none() {
         println!("Failed to parse formula, exiting");
         return;

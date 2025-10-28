@@ -1,5 +1,5 @@
 #![cfg(test)]
-use crate::equation_parser::parse_formula_str;
+use crate::formula_parser::parse_formula_str;
 use crate::{find_solutions, print_solutions};
 
 #[derive(Copy, Clone)]
