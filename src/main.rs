@@ -28,6 +28,8 @@ fn main() {
     print_solutions(&solutions, universe.as_str());
 }
 
+/// Find all the assignments to variables in `equation` based on values in the universe of
+/// substrings of `word` that satisfy the given equation.
 fn find_solutions<'a>(equation: &'a dyn WordEquation, word: &'a str) -> Vec<Substitution<'a>> {
     let free_vars = equation.free_vars();
     let all_subs = all_possible_substitutions(free_vars, word);
@@ -38,8 +40,7 @@ fn find_solutions<'a>(equation: &'a dyn WordEquation, word: &'a str) -> Vec<Subs
         .collect()
 }
 
-fn print_solution(sub: &Substitution) {
-    let mut var_names = sub.keys().collect::<Vec<_>>();
+/// Prints to stdout a pretty-printed CSV formatted table of all substitutions
 fn print_solutions(subs: &Vec<Substitution>, universe: &str) {
     if subs.is_empty() {
         println!("No solutions found");
@@ -75,7 +76,8 @@ fn print_solutions(subs: &Vec<Substitution>, universe: &str) {
     }
 }
 
-/// Assumes that the empty string is a factor of all words
+/// Constructs a list of all substrings of a given word. This assumes that the empty string is a
+/// factor of all words
 fn generate_factors(w: &str) -> Vec<&str> {
     // number of substrings: n(n+1)/2
     let num_factors = w.len() * (w.len() + 1) / 2 + 1;
@@ -95,8 +97,13 @@ fn generate_factors(w: &str) -> Vec<&str> {
     factors
 }
 
+/// Represents a substitution (σ in the literature). An assignment mapping variable names to values
+/// from the universe
 type Substitution<'a> = HashMap<&'a str, &'a str>;
 
+/// Constructs all possible assignments from a universe of factors of the universe constant `w`
+/// to a given list of variables. Works by brute force over the Cartesian product repeated _n_ times
+/// for _n_ variables
 fn all_possible_substitutions<'a>(var_names: Vec<&'a str>, w: &'a str) -> Vec<Substitution<'a>> {
     let factors = generate_factors(w);
 

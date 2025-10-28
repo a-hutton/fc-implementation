@@ -2,12 +2,17 @@ use crate::{generate_factors, Substitution};
 use std::fmt;
 use std::fmt::Formatter;
 
+/// Represents values that can appear in an 'atomic' word equation - either a variable with a name,
+/// or a string constant
 #[derive(Debug, Hash)]
 pub enum AtomicContent<'a> {
     FreeVariable(&'a str),
     Constant(&'a str),
 }
 
+/// Applies a [`Substitution`] to a series of word equation atoms - either variables or constants.
+/// Constants do not have their values changed, variables are given their respective values from
+/// the provided substitution
 fn substitute<'a>(
     equation: &Vec<AtomicContent<'a>>,
     substitution: &Substitution<'a>,
@@ -30,14 +35,14 @@ fn substitute<'a>(
     new_terms
 }
 
+/// A common interface for all word equation types
 pub trait WordEquation: fmt::Display + fmt::Debug {
     fn free_vars(&self) -> Vec<&str>;
     fn check_substitution(&self, substitution: &Substitution) -> bool;
 }
 
-/// x = abc
-/// abc is a vector of [`AtomicContent`] -- a sequence of either variables whose values
-/// can be provided by substitutions, or constants in the universe
+/// An 'atomic' equation where the left hand side is a single variable, and the right hand side is
+/// a sequence of [`AtomicContent`]: either variables or constants
 #[derive(Debug)]
 pub struct AtomicWordEquation<'a> {
     lhs_variable: &'a str,
@@ -72,9 +77,11 @@ impl<'a> WordEquation for AtomicWordEquation<'a> {
         free
     }
 
+    /// The simple atomic case, where the left and right -hand sides are replaced using
+    /// [`substitute`] and compared with simple string comparison
     fn check_substitution(&self, substitution: &Substitution) -> bool {
         if !substitution.contains_key("U") {
-            panic!("Missing universe variable `U` (𝔲) in substitution")
+            panic!("Missing universe constant `U` (𝔲) in substitution")
         }
         let universe = generate_factors(substitution["U"]);
         for (key, val) in substitution.iter() {
@@ -111,7 +118,7 @@ impl fmt::Display for AtomicWordEquation<'_> {
     }
 }
 
-/// φ∧ψ
+/// An equation φ∧ψ: the conjunction of two sub-equations
 #[derive(Debug)]
 pub struct ConjunctionWordEquation<'a> {
     lhs: Box<dyn WordEquation + 'a>,
@@ -138,6 +145,8 @@ impl WordEquation for ConjunctionWordEquation<'_> {
         free
     }
 
+    /// Checks if the substitution holds for _both_ the left and right -hand components of
+    /// the disjunction
     fn check_substitution(&self, substitution: &Substitution) -> bool {
         // check substitution holds for lhs and rhs. Contradictions?
         let lhs_holds = self.lhs.check_substitution(substitution);
@@ -152,7 +161,7 @@ impl fmt::Display for ConjunctionWordEquation<'_> {
     }
 }
 
-/// φ∧ψ
+/// An equation φ∨ψ: the disjunction of two sub-equations
 #[derive(Debug)]
 pub struct DisjunctionWordEquation<'a> {
     lhs: Box<dyn WordEquation + 'a>,
@@ -179,6 +188,8 @@ impl WordEquation for DisjunctionWordEquation<'_> {
         free
     }
 
+    /// Checks if the substitution holds for _either_ the left or right -hand components of
+    /// the conjunction
     fn check_substitution(&self, substitution: &Substitution) -> bool {
         // check substitution holds for lhs and rhs. Contradictions?
         let lhs_holds = self.lhs.check_substitution(substitution);
@@ -193,6 +204,7 @@ impl fmt::Display for DisjunctionWordEquation<'_> {
     }
 }
 
+/// An equation ¬φ: the negation of a single sub-equation
 #[derive(Debug)]
 pub struct NegatedEquation<'a> {
     inner: Box<dyn WordEquation + 'a>,
@@ -209,6 +221,7 @@ impl WordEquation for NegatedEquation<'_> {
         self.inner.free_vars()
     }
 
+    /// Simply the negation of the [`WordEquation::check_substitution`] of the sub-equation
     fn check_substitution(&self, substitution: &Substitution) -> bool {
         !self.inner.check_substitution(substitution)
     }
@@ -221,6 +234,7 @@ impl fmt::Display for NegatedEquation<'_> {
     }
 }
 
+/// An equation ∃ x: φ(x): where a single variable is bound by an existential quantifier
 #[derive(Debug)]
 pub struct ExistentialEquation<'a> {
     inner: Box<dyn WordEquation + 'a>,
@@ -248,6 +262,10 @@ impl WordEquation for ExistentialEquation<'_> {
         free
     }
 
+    /// Checks a [`Substitution`] by calling [`generate_factors`] on the universe constant given
+    /// in the substitution, and for each possible value to assign to the bound variable _x_, a
+    /// new substitution is checked on the inner [`WordEquation::check_substitution`], returning
+    /// `true` when the first valid substitution is found
     fn check_substitution(&self, substitution: &Substitution) -> bool {
         let universe_word = substitution["U"];
         let all_factors = generate_factors(universe_word);
@@ -271,6 +289,7 @@ impl fmt::Display for ExistentialEquation<'_> {
     }
 }
 
+/// An equation ∀ x: φ(x): where a single variable is bound by a universal quantifier
 #[derive(Debug)]
 pub struct UniversalEquation<'a> {
     inner: Box<dyn WordEquation + 'a>,
@@ -298,6 +317,10 @@ impl WordEquation for UniversalEquation<'_> {
         free
     }
 
+    /// Checks a [`Substitution`] by calling [`generate_factors`] on the universe constant given
+    /// in the substitution, and for each possible value to assign to the bound variable _x_, a
+    /// new substitution is checked on the inner [`WordEquation::check_substitution`], returning
+    /// `true` if every new substitution holds
     fn check_substitution(&self, substitution: &Substitution) -> bool {
         let universe_word = substitution["U"];
         let all_factors = generate_factors(universe_word);

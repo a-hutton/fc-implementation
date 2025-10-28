@@ -10,6 +10,9 @@ struct SolutionTestCase {
     num_solutions: usize,
 }
 
+/// Tests the whole process of the program - parsing and finding solutions to word equations.
+/// Asserts that the predicted number of solutions matches the actual one on equations in a given
+/// universe
 #[test]
 fn test_solutions() {
     let cases = [
