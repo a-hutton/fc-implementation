@@ -35,7 +35,8 @@ pub fn parse_word_equation(eq: &str) -> Option<Box<dyn WordEquation + '_>> {
         let equation = parse_equation_pair(equation);
         Some(equation)
     } else {
-        eprintln!("Parse error on word equation\n{:?}", res);
+        let error = res.unwrap_err();
+        eprintln!("Syntax error in word equation: {}", error);
         None
     }
 }

@@ -1,6 +1,6 @@
 #![cfg(test)]
 use crate::equation_parser::parse_word_equation;
-use crate::{find_solutions, print_solution};
+use crate::{find_solutions, print_solutions};
 
 #[derive(Copy, Clone)]
 struct SolutionTestCase {
@@ -160,9 +160,7 @@ fn test_solutions() {
             Some(equation) => {
                 let solutions = find_solutions(&*equation, test.universe);
                 println!("Found {n} solutions", n = solutions.len());
-                for sol in solutions.iter() {
-                    print_solution(sol);
-                }
+                print_solutions(&solutions, test.universe);
                 assert_eq!(solutions.len(), test.num_solutions);
             }
         }
@@ -246,9 +244,7 @@ fn tests_from_literature() {
             Some(equation) => {
                 let solutions = find_solutions(&*equation, test.universe);
                 println!("Found {n} solutions", n = solutions.len());
-                for sol in solutions.iter() {
-                    print_solution(sol);
-                }
+                print_solutions(&solutions, test.universe);
                 assert_eq!(solutions.len(), test.num_solutions);
             }
         }

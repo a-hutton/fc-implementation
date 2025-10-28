@@ -5,13 +5,27 @@ mod tests;
 use crate::equations::WordEquation;
 use itertools::Itertools;
 use std::collections::HashMap;
+use std::env;
 
 fn main() {
-    // find_solutions(r#"(x=y "b" && ¬y="")"#, "aab");
-    let _ = find_solutions(
-        &*equation_parser::parse_word_equation(r#"(x=y "b" && ¬y="")"#).unwrap(),
-        "aab",
-    );
+    let search_pattern = env::args().nth(1);
+    let universe = env::args().nth(2);
+    if search_pattern.is_none() || universe.is_none() {
+        println!("Usage: cargo run -- <pattern> <text>");
+        return;
+    }
+    let search_pattern = search_pattern.unwrap();
+    let universe = universe.unwrap();
+
+    let parsed_equation = equation_parser::parse_word_equation(search_pattern.as_str());
+    if parsed_equation.is_none() {
+        println!("Failed to parse equation, exiting");
+        return;
+    }
+    let parsed_equation = parsed_equation.unwrap();
+    let solutions = find_solutions(&*parsed_equation, universe.as_str());
+    println!("Found {} solutions", solutions.len());
+    print_solutions(&solutions, universe.as_str());
 }
 
 fn find_solutions<'a>(equation: &'a dyn WordEquation, word: &'a str) -> Vec<Substitution<'a>> {
@@ -25,23 +39,40 @@ fn find_solutions<'a>(equation: &'a dyn WordEquation, word: &'a str) -> Vec<Subs
 }
 
 fn print_solution(sub: &Substitution) {
-    let mut keys = sub.keys().collect::<Vec<_>>();
-    keys.sort();
+    let mut var_names = sub.keys().collect::<Vec<_>>();
+fn print_solutions(subs: &Vec<Substitution>, universe: &str) {
+    if subs.is_empty() {
+        println!("No solutions found");
+        return;
+    }
+    let mut var_names = subs[0].keys().collect::<Vec<_>>();
+    var_names.sort();
     // guaranteed to be the longest variable, helps for printing as a 'table'
-    let universe_len = sub["U"].len();
-    for (i, key) in keys.iter().enumerate() {
-        let val = if sub[**key].is_empty() {
-            "ε"
-        } else {
-            sub[**key]
-        };
-        print!("{}: {:width$}", key, val, width = universe_len);
-        if i < keys.len() - 1 {
-            print!(" | ")
+    let universe_len = universe.len();
+
+    // print var names
+    for (i, var_name) in var_names.iter().enumerate() {
+        print!("{var:width$}", var = var_name, width = universe_len);
+        if i < var_names.len() - 1 {
+            print!(", ")
         }
     }
+    println!();
 
-    println!()
+    for sub in subs {
+        for (i, key) in var_names.iter().enumerate() {
+            let val = if sub[**key].is_empty() {
+                "ε"
+            } else {
+                sub[**key]
+            };
+            print!("{val:width$}", val = val, width = universe_len);
+            if i < var_names.len() - 1 {
+                print!(", ")
+            }
+        }
+        println!()
+    }
 }
 
 /// Assumes that the empty string is a factor of all words
