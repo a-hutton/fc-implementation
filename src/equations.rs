@@ -5,29 +5,29 @@ use std::fmt::Formatter;
 /// Represents values that can appear in an 'atomic' word equation - either a variable with a name,
 /// or a string constant
 #[derive(Debug, Hash)]
-pub enum AtomicContent<'a> {
-    FreeVariable(&'a str),
+pub enum EquationContent<'a> {
+    Variable(&'a str),
     Constant(&'a str),
 }
 
-/// Applies a [`Substitution`] to a series of word equation atoms - either variables or constants.
+/// Applies a [`Substitution`] to a `Vec` of [`EquationContent`] - either variables or constants.
 /// Constants do not have their values changed, variables are given their respective values from
-/// the provided substitution
+/// the provided [`Substitution`]
 fn substitute<'a>(
-    equation: &Vec<AtomicContent<'a>>,
+    terms: &Vec<EquationContent<'a>>,
     substitution: &Substitution<'a>,
 ) -> Vec<&'a str> {
-    let mut new_terms = Vec::with_capacity(equation.len());
-    for term in equation {
+    let mut new_terms = Vec::with_capacity(terms.len());
+    for term in terms {
         match term {
-            AtomicContent::FreeVariable(v) => {
+            EquationContent::Variable(v) => {
                 if !substitution.contains_key(v) {
                     panic!("No substitution for (free) variable {:?}", v);
                 }
                 let val = substitution[*v];
                 new_terms.push(val);
             }
-            AtomicContent::Constant(c) => {
+            EquationContent::Constant(c) => {
                 new_terms.push(*c);
             }
         }
@@ -35,22 +35,22 @@ fn substitute<'a>(
     new_terms
 }
 
-/// A common interface for all word equation types
-pub trait WordEquation: fmt::Display + fmt::Debug {
+/// A common interface for all word formula types
+pub trait Formula: fmt::Display + fmt::Debug {
     fn free_vars(&self) -> Vec<&str>;
     fn check_substitution(&self, substitution: &Substitution) -> bool;
 }
 
 /// An 'atomic' equation where the left hand side is a single variable, and the right hand side is
-/// a sequence of [`AtomicContent`]: either variables or constants
+/// a sequence of [`EquationContent`]: either variables or constants
 #[derive(Debug)]
 pub struct AtomicWordEquation<'a> {
     lhs_variable: &'a str,
-    rhs: Vec<AtomicContent<'a>>,
+    rhs: Vec<EquationContent<'a>>,
 }
 
 impl AtomicWordEquation<'_> {
-    pub fn new<'a>(lhs: &'a str, rhs: Vec<AtomicContent<'a>>) -> AtomicWordEquation<'a> {
+    pub fn new<'a>(lhs: &'a str, rhs: Vec<EquationContent<'a>>) -> AtomicWordEquation<'a> {
         AtomicWordEquation {
             lhs_variable: lhs,
             rhs,
@@ -58,7 +58,7 @@ impl AtomicWordEquation<'_> {
     }
 }
 
-impl<'a> WordEquation for AtomicWordEquation<'a> {
+impl<'a> Formula for AtomicWordEquation<'a> {
     fn free_vars(&self) -> Vec<&'a str> {
         let mut free = vec![];
         if self.lhs_variable != "U" {
@@ -67,7 +67,7 @@ impl<'a> WordEquation for AtomicWordEquation<'a> {
 
         for content in &self.rhs {
             // if term is a free variable, add to vec if not already there
-            if let AtomicContent::FreeVariable(var) = content
+            if let EquationContent::Variable(var) = content
                 && !free.contains(var)
                 && *var != "U"
             {
@@ -93,7 +93,7 @@ impl<'a> WordEquation for AtomicWordEquation<'a> {
             }
         }
 
-        let lhs_vec = vec![AtomicContent::FreeVariable(self.lhs_variable)];
+        let lhs_vec = vec![EquationContent::Variable(self.lhs_variable)];
         let lhs_sub = substitute(&lhs_vec, substitution).join("");
         let rhs_sub = substitute(&self.rhs, substitution).join("");
 
@@ -106,10 +106,10 @@ impl fmt::Display for AtomicWordEquation<'_> {
         write!(f, "{}≐", self.lhs_variable).expect("TODO: panic message");
         for content in &self.rhs {
             match content {
-                AtomicContent::FreeVariable(v) => {
+                EquationContent::Variable(v) => {
                     write!(f, "{} ", v).expect("TODO: panic message");
                 }
-                AtomicContent::Constant(c) => {
+                EquationContent::Constant(c) => {
                     write!(f, "{:?} ", c).expect("TODO: panic message");
                 }
             }
@@ -118,22 +118,22 @@ impl fmt::Display for AtomicWordEquation<'_> {
     }
 }
 
-/// An equation φ∧ψ: the conjunction of two sub-equations
+/// A formula φ∧ψ: the conjunction of two sub-formulas
 #[derive(Debug)]
-pub struct ConjunctionWordEquation<'a> {
-    lhs: Box<dyn WordEquation + 'a>,
-    rhs: Box<dyn WordEquation + 'a>,
+pub struct ConjunctiveFormula<'a> {
+    lhs: Box<dyn Formula + 'a>,
+    rhs: Box<dyn Formula + 'a>,
 }
-impl ConjunctionWordEquation<'_> {
+impl ConjunctiveFormula<'_> {
     pub fn new<'a>(
-        lhs: Box<dyn WordEquation + 'a>,
-        rhs: Box<dyn WordEquation + 'a>,
-    ) -> ConjunctionWordEquation<'a> {
-        ConjunctionWordEquation { lhs, rhs }
+        lhs: Box<dyn Formula + 'a>,
+        rhs: Box<dyn Formula + 'a>,
+    ) -> ConjunctiveFormula<'a> {
+        ConjunctiveFormula { lhs, rhs }
     }
 }
 
-impl WordEquation for ConjunctionWordEquation<'_> {
+impl Formula for ConjunctiveFormula<'_> {
     fn free_vars(&self) -> Vec<&str> {
         let mut free = vec![];
         free.extend(self.lhs.free_vars());
@@ -155,28 +155,28 @@ impl WordEquation for ConjunctionWordEquation<'_> {
     }
 }
 
-impl fmt::Display for ConjunctionWordEquation<'_> {
+impl fmt::Display for ConjunctiveFormula<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "({} ∧ {})", self.lhs, self.rhs)
     }
 }
 
-/// An equation φ∨ψ: the disjunction of two sub-equations
+/// A formula φ∨ψ: the disjunction of two sub-formulas
 #[derive(Debug)]
-pub struct DisjunctionWordEquation<'a> {
-    lhs: Box<dyn WordEquation + 'a>,
-    rhs: Box<dyn WordEquation + 'a>,
+pub struct DisjunctiveFormula<'a> {
+    lhs: Box<dyn Formula + 'a>,
+    rhs: Box<dyn Formula + 'a>,
 }
-impl DisjunctionWordEquation<'_> {
+impl DisjunctiveFormula<'_> {
     pub fn new<'a>(
-        lhs: Box<dyn WordEquation + 'a>,
-        rhs: Box<dyn WordEquation + 'a>,
-    ) -> DisjunctionWordEquation<'a> {
-        DisjunctionWordEquation { lhs, rhs }
+        lhs: Box<dyn Formula + 'a>,
+        rhs: Box<dyn Formula + 'a>,
+    ) -> DisjunctiveFormula<'a> {
+        DisjunctiveFormula { lhs, rhs }
     }
 }
 
-impl WordEquation for DisjunctionWordEquation<'_> {
+impl Formula for DisjunctiveFormula<'_> {
     fn free_vars(&self) -> Vec<&str> {
         let mut free = vec![];
         free.extend(self.lhs.free_vars());
@@ -198,59 +198,59 @@ impl WordEquation for DisjunctionWordEquation<'_> {
     }
 }
 
-impl fmt::Display for DisjunctionWordEquation<'_> {
+impl fmt::Display for DisjunctiveFormula<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "({} ∨ {})", self.lhs, self.rhs)
     }
 }
 
-/// An equation ¬φ: the negation of a single sub-equation
+/// A formula ¬φ: the negation of a single sub-formulas
 #[derive(Debug)]
-pub struct NegatedEquation<'a> {
-    inner: Box<dyn WordEquation + 'a>,
+pub struct NegativeFormula<'a> {
+    inner: Box<dyn Formula + 'a>,
 }
 
-impl NegatedEquation<'_> {
-    pub fn new<'a>(inner: Box<dyn WordEquation + 'a>) -> NegatedEquation {
-        NegatedEquation { inner }
+impl NegativeFormula<'_> {
+    pub fn new<'a>(inner: Box<dyn Formula + 'a>) -> NegativeFormula {
+        NegativeFormula { inner }
     }
 }
 
-impl WordEquation for NegatedEquation<'_> {
+impl Formula for NegativeFormula<'_> {
     fn free_vars(&self) -> Vec<&str> {
         self.inner.free_vars()
     }
 
-    /// Simply the negation of the [`WordEquation::check_substitution`] of the sub-equation
+    /// Simply the negation of the [`Formula::check_substitution`] of the sub-formula
     fn check_substitution(&self, substitution: &Substitution) -> bool {
         !self.inner.check_substitution(substitution)
     }
 }
 
-impl fmt::Display for NegatedEquation<'_> {
+impl fmt::Display for NegativeFormula<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "¬").expect("TODO: panic message");
         self.inner.fmt(f)
     }
 }
 
-/// An equation ∃ x: φ(x): where a single variable is bound by an existential quantifier
+/// A formula ∃ x: φ(x): where a single variable is bound by an existential quantifier
 #[derive(Debug)]
-pub struct ExistentialEquation<'a> {
-    inner: Box<dyn WordEquation + 'a>,
+pub struct ExistentialFormula<'a> {
+    inner: Box<dyn Formula + 'a>,
     bound_var: &'a str,
 }
 
-impl<'a> ExistentialEquation<'a> {
-    pub fn new(bound_var: &'a str, inner_equation: Box<dyn WordEquation + 'a>) -> Self {
-        ExistentialEquation {
-            inner: inner_equation,
+impl<'a> ExistentialFormula<'a> {
+    pub fn new(bound_var: &'a str, inner_formula: Box<dyn Formula + 'a>) -> Self {
+        ExistentialFormula {
+            inner: inner_formula,
             bound_var,
         }
     }
 }
 
-impl WordEquation for ExistentialEquation<'_> {
+impl Formula for ExistentialFormula<'_> {
     fn free_vars(&self) -> Vec<&str> {
         let inner_free = self.inner.free_vars();
         let mut free = Vec::with_capacity(inner_free.len());
@@ -264,7 +264,7 @@ impl WordEquation for ExistentialEquation<'_> {
 
     /// Checks a [`Substitution`] by calling [`generate_factors`] on the universe constant given
     /// in the substitution, and for each possible value to assign to the bound variable _x_, a
-    /// new substitution is checked on the inner [`WordEquation::check_substitution`], returning
+    /// new substitution is checked on the inner [`Formula::check_substitution`], returning
     /// `true` when the first valid substitution is found
     fn check_substitution(&self, substitution: &Substitution) -> bool {
         let universe_word = substitution["U"];
@@ -281,7 +281,7 @@ impl WordEquation for ExistentialEquation<'_> {
     }
 }
 
-impl fmt::Display for ExistentialEquation<'_> {
+impl fmt::Display for ExistentialFormula<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let _ = write!(f, "∃{x}: (", x = self.bound_var);
         let _ = self.inner.fmt(f);
@@ -289,23 +289,23 @@ impl fmt::Display for ExistentialEquation<'_> {
     }
 }
 
-/// An equation ∀ x: φ(x): where a single variable is bound by a universal quantifier
+/// A formula ∀ x: φ(x): where a single variable is bound by a universal quantifier
 #[derive(Debug)]
-pub struct UniversalEquation<'a> {
-    inner: Box<dyn WordEquation + 'a>,
+pub struct UniversalFormula<'a> {
+    inner: Box<dyn Formula + 'a>,
     bound_var: &'a str,
 }
 
-impl<'a> UniversalEquation<'a> {
-    pub fn new(bound_var: &'a str, inner_equation: Box<dyn WordEquation + 'a>) -> Self {
-        UniversalEquation {
-            inner: inner_equation,
+impl<'a> UniversalFormula<'a> {
+    pub fn new(bound_var: &'a str, inner_formula: Box<dyn Formula + 'a>) -> Self {
+        UniversalFormula {
+            inner: inner_formula,
             bound_var,
         }
     }
 }
 
-impl WordEquation for UniversalEquation<'_> {
+impl Formula for UniversalFormula<'_> {
     fn free_vars(&self) -> Vec<&str> {
         let inner_free = self.inner.free_vars();
         let mut free = Vec::with_capacity(inner_free.len());
@@ -319,7 +319,7 @@ impl WordEquation for UniversalEquation<'_> {
 
     /// Checks a [`Substitution`] by calling [`generate_factors`] on the universe constant given
     /// in the substitution, and for each possible value to assign to the bound variable _x_, a
-    /// new substitution is checked on the inner [`WordEquation::check_substitution`], returning
+    /// new substitution is checked on the inner [`Formula::check_substitution`], returning
     /// `true` if every new substitution holds
     fn check_substitution(&self, substitution: &Substitution) -> bool {
         let universe_word = substitution["U"];
@@ -336,7 +336,7 @@ impl WordEquation for UniversalEquation<'_> {
     }
 }
 
-impl fmt::Display for UniversalEquation<'_> {
+impl fmt::Display for UniversalFormula<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let _ = write!(f, "∀{x}: (", x = self.bound_var);
         let _ = self.inner.fmt(f);

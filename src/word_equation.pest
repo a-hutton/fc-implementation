@@ -1,11 +1,11 @@
-word_equation = { atomic | neg_atomic | conjunctive_equation | disjunctive_equation | existential_equation | universal_equation }
+formula = { simple_equation | negation | conjunction | disjunction | existential | universal }
 
-atomic = {variable ~ "=" ~ (constant | variable)+}
-neg_atomic = {"¬" ~ word_equation}
-conjunctive_equation = {"(" ~ word_equation ~ ("&&"|"∧") ~ word_equation ~ ")"}
-disjunctive_equation = {"(" ~ word_equation ~ ("||"|"∨") ~ word_equation ~ ")"}
-existential_equation = {("exists" | "∃") ~ variable ~ "(" ~ word_equation ~ ")"}
-universal_equation = {("forall" | "∀") ~ variable ~ "(" ~ word_equation ~ ")"}
+simple_equation = {variable ~ "=" ~ (constant | variable)+}
+negation = {"¬" ~ formula}
+conjunction = {"(" ~ formula ~ ("&&"|"∧") ~ formula ~ ")"}
+disjunction = {"(" ~ formula ~ ("||"|"∨") ~ formula ~ ")"}
+existential = {("exists" | "∃") ~ variable ~ "(" ~ formula ~ ")"}
+universal = {("forall" | "∀") ~ variable ~ "(" ~ formula ~ ")"}
 
 constant = {"\"" ~ ASCII_ALPHANUMERIC* ~ "\""}
 variable = @{ASCII_ALPHA ~ (ASCII_ALPHANUMERIC)*} // atomic rule - no whitespace at separator

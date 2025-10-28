@@ -2,7 +2,7 @@ mod equation_parser;
 mod equations;
 mod tests;
 
-use crate::equations::WordEquation;
+use crate::equations::Formula;
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::env;
@@ -17,25 +17,25 @@ fn main() {
     let search_pattern = search_pattern.unwrap();
     let universe = universe.unwrap();
 
-    let parsed_equation = equation_parser::parse_word_equation(search_pattern.as_str());
-    if parsed_equation.is_none() {
-        println!("Failed to parse equation, exiting");
+    let parsed_formula = equation_parser::parse_formula_str(search_pattern.as_str());
+    if parsed_formula.is_none() {
+        println!("Failed to parse formula, exiting");
         return;
     }
-    let parsed_equation = parsed_equation.unwrap();
-    let solutions = find_solutions(&*parsed_equation, universe.as_str());
+    let parsed_formula = parsed_formula.unwrap();
+    let solutions = find_solutions(&*parsed_formula, universe.as_str());
     println!("Found {} solutions", solutions.len());
     print_solutions(&solutions, universe.as_str());
 }
 
-/// Find all the assignments to variables in `equation` based on values in the universe of
-/// substrings of `word` that satisfy the given equation.
-fn find_solutions<'a>(equation: &'a dyn WordEquation, word: &'a str) -> Vec<Substitution<'a>> {
-    let free_vars = equation.free_vars();
+/// Find all the assignments to variables in a formula based on values in the universe of
+/// substrings of `word` that satisfy the given formula.
+fn find_solutions<'a>(formula: &'a dyn Formula, word: &'a str) -> Vec<Substitution<'a>> {
+    let free_vars = formula.free_vars();
     let all_subs = all_possible_substitutions(free_vars, word);
     all_subs
         .iter()
-        .filter(|sub| equation.check_substitution(sub))
+        .filter(|sub| formula.check_substitution(sub))
         .cloned()
         .collect()
 }
