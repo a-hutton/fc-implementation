@@ -15,6 +15,6 @@ universal = {("forall" | "∀") ~ variable ~ safe_formula }
 constant = {"\"" ~ string_content* ~ "\""}
 string_content = _{(!("\"" | "\\") ~ ANY) | "\\\""} // Either a single character other than " or \ ; or an escaped quote \"
 
-variable = @{ASCII_ALPHA ~ (ASCII_ALPHANUMERIC)*} // atomic rule - no whitespace at separator
+variable = @{(ASCII_ALPHA ~ ASCII_ALPHANUMERIC*) | "$U"} // atomic rule - no whitespace at separator
 
 WHITESPACE = _{ " " } // Special rule name allowing whitespace in other non-atomic rules

@@ -30,31 +30,31 @@ fn test_solutions() {
             num_solutions: 4,
         },
         SolutionTestCase {
-            formula: r#"U="aaa""#,
+            formula: r#"$U="aaa""#,
             universe: "aaa",
             should_fail: false,
             num_solutions: 1,
         },
         SolutionTestCase {
-            formula: r#"(U=x y && (x="a" && y=x))"#,
+            formula: r#"($U=x y && (x="a" && y=x))"#,
             universe: "aa",
             should_fail: false,
             num_solutions: 1,
         },
         SolutionTestCase {
-            formula: r#"(U=x y && U=x)"#,
+            formula: r#"($U=x y && $U=x)"#,
             universe: "aa",
             should_fail: false,
             num_solutions: 1,
         },
         SolutionTestCase {
-            formula: r#"(U = "a" y z &&  z="b")"#,
+            formula: r#"($U = "a" y z &&  z="b")"#,
             universe: "aaab",
             should_fail: false,
             num_solutions: 1,
         },
         SolutionTestCase {
-            formula: r#"x = "a" y z && (x=U && z="b")"#,
+            formula: r#"x = "a" y z && (x=$U && z="b")"#,
             universe: "aaab",
             should_fail: false,
             num_solutions: 1,
@@ -67,13 +67,13 @@ fn test_solutions() {
         },
         // Existential Quantifier
         SolutionTestCase {
-            formula: r#"∃x U = x x"#,
+            formula: r#"∃x $U = x x"#,
             universe: "abbabb",
             should_fail: false,
             num_solutions: 1,
         },
         SolutionTestCase {
-            formula: r#"∃ x(U=x x)"#,
+            formula: r#"∃ x($U=x x)"#,
             universe: "abbcabb",
             should_fail: false,
             num_solutions: 0,
@@ -98,7 +98,7 @@ fn test_solutions() {
             num_solutions: 1,
         },
         SolutionTestCase {
-            formula: r#"U=U"#,
+            formula: r#"$U=$U"#,
             universe: "aaaaa",
             should_fail: true,
             num_solutions: 1,
@@ -112,7 +112,7 @@ fn test_solutions() {
         },
         // Syntax Errors
         SolutionTestCase {
-            formula: r#"(x = "a" y z && (x=U && z="b")"#,
+            formula: r#"(x = "a" y z && (x=$U && z="b")"#,
             universe: "aaab",
             should_fail: true,
             num_solutions: 0,
@@ -137,7 +137,7 @@ fn test_solutions() {
         },
         // No matches
         SolutionTestCase {
-            formula: r#"¬U=U"#,
+            formula: r#"¬$U=$U"#,
             universe: "aaaaa",
             should_fail: false,
             num_solutions: 0,
@@ -178,7 +178,7 @@ fn tests_from_literature() {
         // Theory of Concatenation over Finite Models - Section 1
         // 'Return all factors that occur [at least] twice in w'
         SolutionTestCase {
-            formula: r#"exists p1(exists p2(exists s1(exists s2(((U=p1 x s1 && U=p2 x s2)&&¬p1=p2)))))"#,
+            formula: r#"exists p1(exists p2(exists s1(exists s2((($U=p1 x s1 && $U=p2 x s2)&&¬p1=p2)))))"#,
             universe: "aabaab",
             should_fail: false,
             num_solutions: 6, // ε, a, b, aa, ab, aab
@@ -226,13 +226,13 @@ fn tests_from_literature() {
         // Theory of Concatenation over Finite Models - Example 3.5
         // 'σ(x) occurs exactly once in w'
         SolutionTestCase {
-            formula: r#"(x="bbb" && ∃ p(∃ s((U=p x s ∧ ¬∃ ph(∃ sh((U=ph x sh ∧ ¬ph=p)))))))"#,
+            formula: r#"(x="bbb" && ∃ p(∃ s(($U=p x s ∧ ¬∃ ph(∃ sh(($U=ph x sh ∧ ¬ph=p)))))))"#,
             universe: "ababbba",
             should_fail: false,
             num_solutions: 1,
         },
         SolutionTestCase {
-            formula: r#"x="bbb" && ∃ p ∃ s(U=p x s ∧ ¬∃ ph ∃ sh(U=ph x sh ∧ ¬ph=p))"#,
+            formula: r#"x="bbb" && ∃ p ∃ s($U=p x s ∧ ¬∃ ph ∃ sh($U=ph x sh ∧ ¬ph=p))"#,
             universe: "abb",
             should_fail: false,
             num_solutions: 0,

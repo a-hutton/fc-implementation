@@ -54,7 +54,7 @@ fn test_formula_parse() {
         r#"¬q = "a""#,
         r#"¬x = "a" yqqq z"#,
         r#"(x=y"abc" && ¬y="")"#,
-        r#"exists x (U=x x)"#,
+        r#"exists x ($U=x x)"#,
         r#"¬(x="aa"||x="bb")"#,
     ];
     for case in test_cases {

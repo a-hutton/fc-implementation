@@ -2,6 +2,8 @@ use crate::{generate_factors, Substitution};
 use std::fmt;
 use std::fmt::Formatter;
 
+pub const UNIVERSE_CONSTANT: &str = "$U";
+
 /// Represents values that can appear in an 'atomic' word equation - either a variable with a name,
 /// or a string constant
 #[derive(Debug, Hash)]
@@ -61,7 +63,7 @@ impl AtomicWordEquation<'_> {
 impl<'a> Formula for AtomicWordEquation<'a> {
     fn free_vars(&self) -> Vec<&'a str> {
         let mut free = vec![];
-        if self.lhs_variable != "U" {
+        if self.lhs_variable != UNIVERSE_CONSTANT {
             free.push(self.lhs_variable);
         }
 
@@ -69,7 +71,7 @@ impl<'a> Formula for AtomicWordEquation<'a> {
             // if term is a free variable, add to vec if not already there
             if let EquationContent::Variable(var) = content
                 && !free.contains(var)
-                && *var != "U"
+                && *var != UNIVERSE_CONSTANT
             {
                 free.push(*var);
             }
@@ -80,10 +82,10 @@ impl<'a> Formula for AtomicWordEquation<'a> {
     /// The simple atomic case, where the left and right -hand sides are replaced using
     /// [`substitute`] and compared with simple string comparison
     fn check_substitution(&self, substitution: &Substitution) -> bool {
-        if !substitution.contains_key("U") {
-            panic!("Missing universe constant `U` (𝔲) in substitution")
+        if !substitution.contains_key(UNIVERSE_CONSTANT) {
+            panic!("Missing universe constant `$U` (𝔲) in substitution")
         }
-        let universe = generate_factors(substitution["U"]);
+        let universe = generate_factors(substitution[UNIVERSE_CONSTANT]);
         for (key, val) in substitution.iter() {
             if !universe.contains(val) {
                 panic!(
@@ -267,7 +269,7 @@ impl Formula for ExistentialFormula<'_> {
     /// new substitution is checked on the inner [`Formula::check_substitution`], returning
     /// `true` when the first valid substitution is found
     fn check_substitution(&self, substitution: &Substitution) -> bool {
-        let universe_word = substitution["U"];
+        let universe_word = substitution[UNIVERSE_CONSTANT];
         let all_factors = generate_factors(universe_word);
         let mut altered_substitution = substitution.clone();
         for factor in all_factors {
@@ -322,7 +324,7 @@ impl Formula for UniversalFormula<'_> {
     /// new substitution is checked on the inner [`Formula::check_substitution`], returning
     /// `true` if every new substitution holds
     fn check_substitution(&self, substitution: &Substitution) -> bool {
-        let universe_word = substitution["U"];
+        let universe_word = substitution[UNIVERSE_CONSTANT];
         let all_factors = generate_factors(universe_word);
         let mut altered_substitution = substitution.clone();
         for factor in all_factors {

@@ -115,7 +115,7 @@ fn all_possible_substitutions<'a>(var_names: Vec<&'a str>, w: &'a str) -> Vec<Su
         for i in 0..sub_vals.len() {
             sub.insert(var_names[i], sub_vals[i]);
         }
-        sub.insert("U", w);
+        sub.insert(formula::UNIVERSE_CONSTANT, w);
         substitutions.push(sub);
     }
     substitutions
