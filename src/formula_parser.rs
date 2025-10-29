@@ -90,7 +90,7 @@ fn parse_atomic_equation<'a>(eq: &mut Pairs<'a, Rule>) -> AtomicWordEquation<'a>
 
 /// Parses a [`Pairs<Rule>`] sequence into an instance of [`NegativeFormula`]
 fn parse_negation<'a>(eq: &mut Pairs<'a, Rule>) -> NegativeFormula<'a> {
-    let inner = eq.next().unwrap().into_inner().next().unwrap();
+    let inner = eq.next().unwrap();
     let atomic_eq = parse_formula_pair(inner);
     NegativeFormula::new(atomic_eq)
 }
@@ -99,10 +99,8 @@ fn parse_negation<'a>(eq: &mut Pairs<'a, Rule>) -> NegativeFormula<'a> {
 fn parse_conjunction<'a>(eq: &mut Pairs<'a, Rule>) -> ConjunctiveFormula<'a> {
     // for lhs and rhs, get the inner type within the formula rule
     let lhs_eq = eq.next().unwrap();
-    let lhs_eq = lhs_eq.into_inner().next().unwrap();
 
     let rhs_eq = eq.next().unwrap();
-    let rhs_eq = rhs_eq.into_inner().next().unwrap();
 
     let lhs = parse_formula_pair(lhs_eq);
     let rhs = parse_formula_pair(rhs_eq);
@@ -114,10 +112,8 @@ fn parse_conjunction<'a>(eq: &mut Pairs<'a, Rule>) -> ConjunctiveFormula<'a> {
 fn parse_disjunction<'a>(eq: &mut Pairs<'a, Rule>) -> DisjunctiveFormula<'a> {
     // for lhs and rhs, get the inner type within the formula rule
     let lhs_eq = eq.next().unwrap();
-    let lhs_eq = lhs_eq.into_inner().next().unwrap();
 
     let rhs_eq = eq.next().unwrap();
-    let rhs_eq = rhs_eq.into_inner().next().unwrap();
 
     let lhs = parse_formula_pair(lhs_eq);
     let rhs = parse_formula_pair(rhs_eq);
@@ -134,7 +130,7 @@ fn parse_existential<'a>(eq: &mut Pairs<'a, Rule>) -> ExistentialFormula<'a> {
     let bound_variable = variable_pair.as_str();
 
     // 'inner' is the wrapping `formula` rule, so we go into that to get the inner formula type
-    let inner = eq.next().unwrap().into_inner().next().unwrap();
+    let inner = eq.next().unwrap();
     let inner_formula = parse_formula_pair(inner);
 
     ExistentialFormula::new(bound_variable, inner_formula)
@@ -149,7 +145,7 @@ fn parse_universal<'a>(eq: &mut Pairs<'a, Rule>) -> UniversalFormula<'a> {
     let bound_variable = variable_pair.as_str();
 
     // 'inner' is the wrapping `formula` rule, so we go into that to get the inner formula type
-    let inner = eq.next().unwrap().into_inner().next().unwrap();
+    let inner = eq.next().unwrap();
     let inner_formula = parse_formula_pair(inner);
 
     UniversalFormula::new(bound_variable, inner_formula)
@@ -167,7 +163,7 @@ fn parse_formula_pair<'a>(pair: Pair<'a, Rule>) -> Box<dyn Formula + 'a> {
         Rule::universal => Box::from(parse_universal(&mut pair.into_inner())),
 
         r => {
-            panic!("Expected a formula type, round rule type {:?}", r);
+            panic!("Expected a formula type, found rule type {:?}", r);
         }
     }
 }

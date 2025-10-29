@@ -24,7 +24,7 @@ fn test_solutions() {
             num_solutions: 15,
         },
         SolutionTestCase {
-            formula: r#"(x = "a" y z && (¬y="" && ¬z=""))"#,
+            formula: r#"x = "a" y z && (¬y="" && ¬z="")"#,
             universe: "aaab",
             should_fail: false,
             num_solutions: 4,
@@ -54,7 +54,7 @@ fn test_solutions() {
             num_solutions: 1,
         },
         SolutionTestCase {
-            formula: r#"(x = "a" y z && (x=U && z="b"))"#,
+            formula: r#"x = "a" y z && (x=U && z="b")"#,
             universe: "aaab",
             should_fail: false,
             num_solutions: 1,
@@ -67,7 +67,7 @@ fn test_solutions() {
         },
         // Existential Quantifier
         SolutionTestCase {
-            formula: r#"∃ x(U=x x)"#,
+            formula: r#"∃x U = x x"#,
             universe: "abbabb",
             should_fail: false,
             num_solutions: 1,
@@ -79,7 +79,7 @@ fn test_solutions() {
             num_solutions: 0,
         },
         SolutionTestCase {
-            formula: r#"(X="a" || X="aa")"#,
+            formula: r#"X="a" || X="aa""#,
             universe: "aa",
             should_fail: false,
             num_solutions: 2,
@@ -149,7 +149,7 @@ fn test_solutions() {
             num_solutions: 0,
         },
         SolutionTestCase {
-            formula: r#"(x=y"aaa" && y="b")"#,
+            formula: r#"x=y"aaa" && y="b""#,
             universe: "aaaaa",
             should_fail: false,
             num_solutions: 0,
@@ -186,7 +186,7 @@ fn tests_from_literature() {
         // Theory of Concatenation over Finite Models - Section 1
         // 'Return all factors x that have two non-overlapping occurrences in w'
         SolutionTestCase {
-            formula: r#"exists y(exists z(y=x z x))"#,
+            formula: r#"exists y exists z y=x z x "#,
             universe: "aabcbc",
             should_fail: false,
             num_solutions: 5, // ε, a, b, c, bc
@@ -194,7 +194,7 @@ fn tests_from_literature() {
         // Theory of Concatenation over Finite Models - Example 3.5
         // 'σ(y) must occur in w between papaya and banana' (1)
         SolutionTestCase {
-            formula: r#"∃ x(x = "papaya" y "banana")"#,
+            formula: r#"∃x x = "papaya" y "banana""#,
             universe: "papayayybanana",
             should_fail: false,
             num_solutions: 1, // yy
@@ -202,7 +202,7 @@ fn tests_from_literature() {
         // Theory of Concatenation over Finite Models - Example 3.5
         // 'σ(y) must occur in w between papaya and banana' (2)
         SolutionTestCase {
-            formula: r#"∃ x(x = "papaya" y "banana")"#,
+            formula: r#"∃x x = "papaya" y "banana""#,
             universe: "papayabannnnnnana",
             should_fail: false,
             num_solutions: 0,
@@ -210,7 +210,7 @@ fn tests_from_literature() {
         // Theory of Concatenation over Finite Models - Example 3.5
         // 'w must contain papaya or banana as a factor' (1)
         SolutionTestCase {
-            formula: r#"∃ x((x = "papaya"  ∨ x = "banana"))"#,
+            formula: r#"∃ x(x = "papaya"  ∨ x = "banana")"#,
             universe: "papayabbbb",
             should_fail: false,
             num_solutions: 1, // papaya
@@ -218,7 +218,7 @@ fn tests_from_literature() {
         // Theory of Concatenation over Finite Models - Example 3.5
         // 'w must contain papaya or banana as a factor' (2)
         SolutionTestCase {
-            formula: r#"∃ x((x = "papaya"  ∨ x = "banana"))"#,
+            formula: r#"∃x (x = "papaya"  ∨ x = "banana")"#,
             universe: "bannnnnana",
             should_fail: false,
             num_solutions: 0,
@@ -232,7 +232,7 @@ fn tests_from_literature() {
             num_solutions: 1,
         },
         SolutionTestCase {
-            formula: r#"(x="bbb" && ∃ p(∃ s((U=p x s ∧ ¬∃ ph(∃ sh((U=ph x sh ∧ ¬ph=p)))))))"#,
+            formula: r#"x="bbb" && ∃ p ∃ s(U=p x s ∧ ¬∃ ph ∃ sh(U=ph x sh ∧ ¬ph=p))"#,
             universe: "abb",
             should_fail: false,
             num_solutions: 0,

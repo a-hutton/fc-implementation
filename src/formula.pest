@@ -1,13 +1,20 @@
-formula = { simple_equation | negation | conjunction | disjunction | existential | universal }
+formula = { SOI ~ (unsafe_formula | safe_formula) ~ EOI  }
+
+// Safe and unsafe formulas solve the left-recursion problem by forcing the application of parens, but only where necessary
+// 'Silent' rules starting with _ do not appear as tokens from the generated parser, for simplicity
+safe_formula = _{"(" ~ unsafe_formula ~ ")" | "(" ~ safe_formula ~ ")" | simple_equation | negation | existential | universal}
+unsafe_formula = _{disjunction | conjunction}
 
 simple_equation = {variable ~ "=" ~ (constant | variable)+}
-negation = {"¬" ~ formula}
-conjunction = {"(" ~ formula ~ ("&&"|"∧") ~ formula ~ ")"}
-disjunction = {"(" ~ formula ~ ("||"|"∨") ~ formula ~ ")"}
-existential = {("exists" | "∃") ~ variable ~ "(" ~ formula ~ ")"}
-universal = {("forall" | "∀") ~ variable ~ "(" ~ formula ~ ")"}
+negation = {"¬" ~ safe_formula}
+conjunction = { safe_formula ~ ("&&"|"∧") ~ safe_formula }
+disjunction = { safe_formula ~ ("||"|"∨") ~ safe_formula }
+existential = {("exists" | "∃") ~ variable  ~ safe_formula }
+universal = {("forall" | "∀") ~ variable ~ safe_formula }
 
-constant = {"\"" ~ ASCII_ALPHANUMERIC* ~ "\""}
+constant = {"\"" ~ string_content* ~ "\""}
+string_content = _{(!("\"" | "\\") ~ ANY) | "\\\""} // Either a single character other than " or \ ; or an escaped quote \"
+
 variable = @{ASCII_ALPHA ~ (ASCII_ALPHANUMERIC)*} // atomic rule - no whitespace at separator
 
-WHITESPACE = _{ " " } // Special rule name
+WHITESPACE = _{ " " } // Special rule name allowing whitespace in other non-atomic rules
