@@ -38,7 +38,7 @@ fn substitute<'a>(
 }
 
 /// A common interface for all word formula types
-pub trait Formula: fmt::Display + fmt::Debug {
+pub trait Formula: Sync + fmt::Display + fmt::Debug {
     fn free_vars(&self) -> Vec<&str>;
     fn check_substitution(&self, substitution: &Substitution) -> bool;
 }

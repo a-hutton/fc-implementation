@@ -1,3 +1,4 @@
+use rayon::iter::ParallelIterator;
 mod formula;
 mod formula_parser;
 mod tests;
@@ -5,6 +6,7 @@ mod tests;
 use crate::formula::Formula;
 use clap::Parser;
 use itertools::Itertools;
+use rayon::iter::IntoParallelRefIterator;
 use std::collections::HashMap;
 
 fn main() {
@@ -41,9 +43,9 @@ fn find_solutions<'a>(formula: &'a dyn Formula, word: &'a str) -> Vec<Substituti
     let free_vars = formula.free_vars();
     let all_subs = all_possible_substitutions(free_vars, word);
     all_subs
-        .iter()
-        .filter(|sub| formula.check_substitution(sub))
+        .par_iter()
         .cloned()
+        .filter(|sub| formula.check_substitution(sub))
         .collect()
 }
 
@@ -116,6 +118,10 @@ fn all_possible_substitutions<'a>(var_names: Vec<&'a str>, w: &'a str) -> Vec<Su
 
     let var_vals_iter = std::iter::repeat_n(factors, var_names.len());
     let subs_iter = var_vals_iter.multi_cartesian_product();
+    println!(
+        "Number of possible substitutions: {}",
+        subs_iter.try_len().unwrap()
+    );
     let mut substitutions = Vec::with_capacity(subs_iter.try_len().unwrap());
     for sub_vals in subs_iter {
         let mut sub = Substitution::new();
