@@ -1,6 +1,8 @@
 #![cfg(test)]
+
 use crate::formula_parser::parse_formula_str;
 use crate::{find_solutions, print_solutions};
+use std::time::Instant;
 
 #[derive(Copy, Clone)]
 struct SolutionTestCase {
@@ -279,4 +281,14 @@ fn test_free_vars() {
         got_vars.sort();
         assert_eq!(got_vars, test.free_vars)
     }
+}
+
+#[test]
+fn difficult_test() {
+    let t1 = Instant::now();
+    let form = parse_formula_str(r#"Z=X"ab"Y && Z=Y"ba"X"#).unwrap();
+    let universe = "ababaabababaababa";
+    let solutions = find_solutions(&*form, universe);
+    print_solutions(&solutions, universe);
+    println!("Time taken: {:.2}s", t1.elapsed().as_secs_f32());
 }
