@@ -1,3 +1,4 @@
+use rayon::iter::ParallelIterator;
 mod formula;
 mod formula_parser;
 mod tests;
@@ -5,6 +6,7 @@ mod tests;
 use crate::formula::Formula;
 use clap::Parser;
 use itertools::Itertools;
+use rayon::iter::IntoParallelRefIterator;
 use std::collections::HashMap;
 use std::fs;
 use unicode_segmentation::UnicodeSegmentation;
@@ -55,7 +57,7 @@ fn find_solutions<'a>(formula: &'a dyn Formula, word: &'a str) -> Vec<Substituti
     let universe = generate_factors(word);
     let all_subs = all_possible_substitutions(free_vars, word, &universe);
     all_subs
-        .iter()
+        .par_iter()
         .filter(|sub| formula.check_substitution(sub, &universe))
         .cloned()
         .collect()
