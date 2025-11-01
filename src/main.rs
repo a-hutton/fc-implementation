@@ -3,29 +3,36 @@ mod formula_parser;
 mod tests;
 
 use crate::formula::Formula;
+use clap::Parser;
 use itertools::Itertools;
 use std::collections::HashMap;
-use std::env;
 
 fn main() {
-    let search_pattern = env::args().nth(1);
-    let universe = env::args().nth(2);
-    if search_pattern.is_none() || universe.is_none() {
-        println!("Usage: cargo run -- <pattern> <text>");
-        return;
-    }
-    let search_pattern = search_pattern.unwrap();
-    let universe = universe.unwrap();
+    let args = Args::parse();
 
-    let parsed_formula = formula_parser::parse_formula_str(search_pattern.as_str());
+    let parsed_formula = formula_parser::parse_formula_str(args.pattern.as_str());
     if parsed_formula.is_none() {
         println!("Failed to parse formula, exiting");
         return;
     }
     let parsed_formula = parsed_formula.unwrap();
-    let solutions = find_solutions(&*parsed_formula, universe.as_str());
+    let solutions = find_solutions(&*parsed_formula, args.text.as_str());
     println!("Found {} solutions", solutions.len());
-    print_solutions(&solutions, universe.as_str());
+    if !args.quiet {
+        print_solutions(&solutions, args.text.as_str());
+    }
+}
+
+#[derive(clap::Parser)]
+#[command(version)]
+struct Args {
+    /// The formula used to search the text
+    pattern: String,
+    /// The text universe the search is applied to
+    text: String,
+    /// When set to quiet, the full table of found solutions won't be printed, just its size
+    #[arg(short, long)]
+    quiet: bool,
 }
 
 /// Find all the assignments to variables in a formula based on values in the universe of
