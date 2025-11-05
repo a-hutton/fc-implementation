@@ -1,5 +1,6 @@
 #![cfg(test)]
 
+use crate::formula::Formula;
 use crate::formula_parser::parse_formula_str;
 use crate::{find_solutions, print_solutions};
 use std::time::Instant;
@@ -291,4 +292,18 @@ fn difficult_test() {
     let solutions = find_solutions(&*form, universe);
     print_solutions(&solutions, universe);
     println!("Time taken: {:.2}s", t1.elapsed().as_secs_f32());
+}
+
+#[test]
+fn test_heuristics() {
+    let parsed_formula = parse_formula_str(r#"Z=X"ab"Y && Z=Y"ba"X"#);
+    match parsed_formula {
+        None => {}
+        Some(form) => {
+            println!("{:#?}", form.constraints());
+
+            let solutions = find_solutions(&*form, "aababab");
+            print_solutions(&solutions, "aababab");
+        }
+    }
 }

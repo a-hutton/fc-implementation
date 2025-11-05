@@ -1,4 +1,6 @@
-use crate::{generate_factors, Substitution};
+use crate::{generate_factors, Substitution, VariableRelation};
+use itertools::Itertools;
+use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -41,6 +43,7 @@ fn substitute<'a>(
 pub trait Formula: Sync + fmt::Display + fmt::Debug {
     fn free_vars(&self) -> Vec<&str>;
     fn check_substitution(&self, substitution: &Substitution) -> bool;
+    fn constraints(&'_ self) -> HashSet<VariableRelation<'_>>;
 }
 
 /// An 'atomic' equation where the left hand side is a single variable, and the right hand side is
@@ -101,6 +104,40 @@ impl<'a> Formula for AtomicWordEquation<'a> {
 
         lhs_sub == rhs_sub
     }
+
+    fn constraints(&'_ self) -> HashSet<VariableRelation<'_>> {
+        let rhs: Vec<_> = self
+            .rhs
+            .iter()
+            .filter(|item| matches!(item, EquationContent::Variable(_)))
+            .map(|var| {
+                if let EquationContent::Variable(v) = var {
+                    *v
+                } else {
+                    unreachable!()
+                }
+            })
+            .sorted()
+            .collect();
+
+        let constant: usize = self
+            .rhs
+            .iter()
+            .filter(|item| matches!(item, EquationContent::Constant(_)))
+            .map(|var| {
+                if let EquationContent::Constant(v) = var {
+                    (*v).len()
+                } else {
+                    unreachable!()
+                }
+            })
+            .sum();
+        HashSet::from([VariableRelation::LengthEquality(
+            self.lhs_variable,
+            rhs,
+            constant,
+        )])
+    }
 }
 
 impl fmt::Display for AtomicWordEquation<'_> {
@@ -155,6 +192,13 @@ impl Formula for ConjunctiveFormula<'_> {
         let rhs_holds = self.rhs.check_substitution(substitution);
         lhs_holds && rhs_holds
     }
+
+    fn constraints(&'_ self) -> HashSet<VariableRelation> {
+        let mut lhs_constraints = self.lhs.constraints();
+        let rhs_constraints = self.rhs.constraints();
+        lhs_constraints.extend(rhs_constraints);
+        lhs_constraints
+    }
 }
 
 impl fmt::Display for ConjunctiveFormula<'_> {
@@ -198,6 +242,10 @@ impl Formula for DisjunctiveFormula<'_> {
         let rhs_holds = self.rhs.check_substitution(substitution);
         lhs_holds || rhs_holds
     }
+
+    fn constraints(&'_ self) -> HashSet<VariableRelation> {
+        todo!()
+    }
 }
 
 impl fmt::Display for DisjunctiveFormula<'_> {
@@ -226,6 +274,10 @@ impl Formula for NegativeFormula<'_> {
     /// Simply the negation of the [`Formula::check_substitution`] of the sub-formula
     fn check_substitution(&self, substitution: &Substitution) -> bool {
         !self.inner.check_substitution(substitution)
+    }
+
+    fn constraints(&'_ self) -> HashSet<VariableRelation> {
+        todo!()
     }
 }
 
@@ -281,6 +333,10 @@ impl Formula for ExistentialFormula<'_> {
         }
         false
     }
+
+    fn constraints(&'_ self) -> HashSet<VariableRelation> {
+        todo!()
+    }
 }
 
 impl fmt::Display for ExistentialFormula<'_> {
@@ -335,6 +391,10 @@ impl Formula for UniversalFormula<'_> {
             }
         }
         true
+    }
+
+    fn constraints(&'_ self) -> HashSet<VariableRelation> {
+        todo!()
     }
 }
 

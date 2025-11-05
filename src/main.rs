@@ -3,11 +3,11 @@ mod formula;
 mod formula_parser;
 mod tests;
 
-use crate::formula::Formula;
+use crate::formula::{Formula, UNIVERSE_CONSTANT};
 use clap::Parser;
 use itertools::Itertools;
 use rayon::iter::IntoParallelRefIterator;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 fn main() {
     let args = Args::parse();
@@ -41,7 +41,7 @@ struct Args {
 /// substrings of `word` that satisfy the given formula.
 fn find_solutions<'a>(formula: &'a dyn Formula, word: &'a str) -> Vec<Substitution<'a>> {
     let free_vars = formula.free_vars();
-    let all_subs = all_possible_substitutions(free_vars, word);
+    let all_subs = all_possible_substitutions(free_vars, formula.constraints(), word);
     all_subs
         .par_iter()
         .cloned()
@@ -85,6 +85,11 @@ fn print_solutions(subs: &Vec<Substitution>, universe: &str) {
     }
 }
 
+#[derive(PartialEq, Clone, Eq, Hash, Debug)]
+enum VariableRelation<'a> {
+    LengthEquality(&'a str, Vec<&'a str>, usize),
+}
+
 /// Constructs a list of all substrings of a given word. This assumes that the empty string is a
 /// factor of all words
 fn generate_factors(w: &str) -> Vec<&str> {
@@ -113,7 +118,11 @@ type Substitution<'a> = HashMap<&'a str, &'a str>;
 /// Constructs all possible assignments from a universe of factors of the universe constant `w`
 /// to a given list of variables. Works by brute force over the Cartesian product repeated _n_ times
 /// for _n_ variables
-fn all_possible_substitutions<'a>(var_names: Vec<&'a str>, w: &'a str) -> Vec<Substitution<'a>> {
+fn all_possible_substitutions<'a>(
+    var_names: Vec<&'a str>,
+    constraints: HashSet<VariableRelation>,
+    w: &'a str,
+) -> Vec<Substitution<'a>> {
     let factors = generate_factors(w);
 
     let var_vals_iter = std::iter::repeat_n(factors, var_names.len());
@@ -122,14 +131,31 @@ fn all_possible_substitutions<'a>(var_names: Vec<&'a str>, w: &'a str) -> Vec<Su
         "Number of possible substitutions: {}",
         subs_iter.try_len().unwrap()
     );
+    // FIXME: find a better way of allocating size than this - grossly overestimates?
     let mut substitutions = Vec::with_capacity(subs_iter.try_len().unwrap());
-    for sub_vals in subs_iter {
+    'sub_loop: for sub_vals in subs_iter {
         let mut sub = Substitution::new();
         for i in 0..sub_vals.len() {
             sub.insert(var_names[i], sub_vals[i]);
         }
+        for constraint in constraints.iter() {
+            match constraint {
+                VariableRelation::LengthEquality(x, sum_vars, c) => {
+                    let lhs_len = if *x == UNIVERSE_CONSTANT {
+                        w.len()
+                    } else {
+                        sub[x].len()
+                    };
+                    let rhs_len: usize = sum_vars.iter().map(|var| sub[var].len()).sum();
+                    if lhs_len != (rhs_len + c) {
+                        continue 'sub_loop;
+                    }
+                }
+            }
+        }
         sub.insert(formula::UNIVERSE_CONSTANT, w);
         substitutions.push(sub);
     }
+    println!("Trimmed to {}", substitutions.len());
     substitutions
 }
