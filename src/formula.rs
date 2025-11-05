@@ -40,7 +40,7 @@ fn substitute<'a>(
 /// A common interface for all word formula types
 pub trait Formula: fmt::Display + fmt::Debug {
     fn free_vars(&self) -> Vec<&str>;
-    fn check_substitution(&self, substitution: &Substitution, universe: &Vec<&str>) -> bool;
+    fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool;
 }
 
 /// An 'atomic' equation where the left hand side is a single variable, and the right hand side is
@@ -81,7 +81,7 @@ impl<'a> Formula for AtomicWordEquation<'a> {
 
     /// The simple atomic case, where the left and right -hand sides are replaced using
     /// [`substitute`] and compared with simple string comparison
-    fn check_substitution(&self, substitution: &Substitution, universe: &Vec<&str>) -> bool {
+    fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
         if !substitution.contains_key(UNIVERSE_CONSTANT) {
             panic!("Missing universe constant `$U` (𝔲) in substitution")
         }
@@ -148,7 +148,7 @@ impl Formula for ConjunctiveFormula<'_> {
 
     /// Checks if the substitution holds for _both_ the left and right -hand components of
     /// the disjunction
-    fn check_substitution(&self, substitution: &Substitution, universe: &Vec<&str>) -> bool {
+    fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
         // check substitution holds for lhs and rhs. Contradictions?
         let lhs_holds = self.lhs.check_substitution(substitution, universe);
         let rhs_holds = self.rhs.check_substitution(substitution, universe);
@@ -191,7 +191,7 @@ impl Formula for DisjunctiveFormula<'_> {
 
     /// Checks if the substitution holds for _either_ the left or right -hand components of
     /// the conjunction
-    fn check_substitution(&self, substitution: &Substitution, universe: &Vec<&str>) -> bool {
+    fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
         // check substitution holds for lhs and rhs. Contradictions?
         let lhs_holds = self.lhs.check_substitution(substitution, universe);
         let rhs_holds = self.rhs.check_substitution(substitution, universe);
@@ -223,7 +223,7 @@ impl Formula for NegativeFormula<'_> {
     }
 
     /// Simply the negation of the [`Formula::check_substitution`] of the sub-formula
-    fn check_substitution(&self, substitution: &Substitution, universe: &Vec<&str>) -> bool {
+    fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
         !self.inner.check_substitution(substitution, universe)
     }
 }
@@ -267,7 +267,7 @@ impl Formula for ExistentialFormula<'_> {
     /// in the substitution, and for each possible value to assign to the bound variable _x_, a
     /// new substitution is checked on the inner [`Formula::check_substitution`], returning
     /// `true` when the first valid substitution is found
-    fn check_substitution(&self, substitution: &Substitution, universe: &Vec<&str>) -> bool {
+    fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
         let mut altered_substitution = substitution.clone();
         for factor in universe {
             altered_substitution.insert(self.bound_var, factor);
@@ -322,7 +322,7 @@ impl Formula for UniversalFormula<'_> {
     /// in the substitution, and for each possible value to assign to the bound variable _x_, a
     /// new substitution is checked on the inner [`Formula::check_substitution`], returning
     /// `true` if every new substitution holds
-    fn check_substitution(&self, substitution: &Substitution, universe: &Vec<&str>) -> bool {
+    fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
         let universe_word = substitution[UNIVERSE_CONSTANT];
         let all_factors = generate_factors(universe_word);
         let mut altered_substitution = substitution.clone();
