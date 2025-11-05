@@ -39,10 +39,11 @@ struct Args {
 /// substrings of `word` that satisfy the given formula.
 fn find_solutions<'a>(formula: &'a dyn Formula, word: &'a str) -> Vec<Substitution<'a>> {
     let free_vars = formula.free_vars();
-    let all_subs = all_possible_substitutions(free_vars, word);
+    let universe = generate_factors(word);
+    let all_subs = all_possible_substitutions(free_vars, word, &universe);
     all_subs
         .iter()
-        .filter(|sub| formula.check_substitution(sub))
+        .filter(|sub| formula.check_substitution(sub, &universe))
         .cloned()
         .collect()
 }
@@ -111,10 +112,12 @@ type Substitution<'a> = HashMap<&'a str, &'a str>;
 /// Constructs all possible assignments from a universe of factors of the universe constant `w`
 /// to a given list of variables. Works by brute force over the Cartesian product repeated _n_ times
 /// for _n_ variables
-fn all_possible_substitutions<'a>(var_names: Vec<&'a str>, w: &'a str) -> Vec<Substitution<'a>> {
-    let factors = generate_factors(w);
-
-    let var_vals_iter = std::iter::repeat_n(factors, var_names.len());
+fn all_possible_substitutions<'a>(
+    var_names: Vec<&'a str>,
+    w: &'a str,
+    universe: &Vec<&'a str>,
+) -> Vec<Substitution<'a>> {
+    let var_vals_iter = std::iter::repeat_n(universe, var_names.len());
     let subs_iter = var_vals_iter.multi_cartesian_product();
     let mut substitutions = Vec::with_capacity(subs_iter.try_len().unwrap());
     for sub_vals in subs_iter {
