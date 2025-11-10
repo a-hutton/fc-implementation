@@ -193,7 +193,7 @@ impl Formula for ConjunctiveFormula<'_> {
         lhs_holds && rhs_holds
     }
 
-    fn constraints(&'_ self) -> HashSet<VariableRelation> {
+    fn constraints(&'_ self) -> HashSet<VariableRelation<'_>> {
         let mut lhs_constraints = self.lhs.constraints();
         let rhs_constraints = self.rhs.constraints();
         lhs_constraints.extend(rhs_constraints);
@@ -243,7 +243,7 @@ impl Formula for DisjunctiveFormula<'_> {
         lhs_holds || rhs_holds
     }
 
-    fn constraints(&'_ self) -> HashSet<VariableRelation> {
+    fn constraints(&'_ self) -> HashSet<VariableRelation<'_>> {
         todo!()
     }
 }
@@ -276,7 +276,7 @@ impl Formula for NegativeFormula<'_> {
         !self.inner.check_substitution(substitution)
     }
 
-    fn constraints(&'_ self) -> HashSet<VariableRelation> {
+    fn constraints(&'_ self) -> HashSet<VariableRelation<'_>> {
         todo!()
     }
 }
@@ -334,7 +334,7 @@ impl Formula for ExistentialFormula<'_> {
         false
     }
 
-    fn constraints(&'_ self) -> HashSet<VariableRelation> {
+    fn constraints(&'_ self) -> HashSet<VariableRelation<'_>> {
         todo!()
     }
 }
@@ -393,7 +393,7 @@ impl Formula for UniversalFormula<'_> {
         true
     }
 
-    fn constraints(&'_ self) -> HashSet<VariableRelation> {
+    fn constraints(&'_ self) -> HashSet<VariableRelation<'_>> {
         todo!()
     }
 }
