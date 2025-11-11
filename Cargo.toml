@@ -8,3 +8,4 @@ clap = { version = "4.5.51", features = ["derive"] }
 itertools = "0.14.0"
 pest = "2.8.3"
 pest_derive = "2.8.3"
+unicode-segmentation = "1.12.0"

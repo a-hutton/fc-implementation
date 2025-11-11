@@ -57,7 +57,7 @@ fn print_solutions(subs: &Vec<Substitution>, universe: &str) {
     let mut var_names = subs[0].keys().collect::<Vec<_>>();
     var_names.sort();
     // guaranteed to be the longest variable, helps for printing as a 'table'
-    let universe_len = universe.len();
+    let universe_len = UnicodeSegmentation::graphemes(universe, true).count();
 
     // print var names
     for (i, var_name) in var_names.iter().enumerate() {
@@ -87,15 +87,22 @@ fn print_solutions(subs: &Vec<Substitution>, universe: &str) {
 /// Constructs a list of all substrings of a given word. This assumes that the empty string is a
 /// factor of all words
 fn generate_factors(w: &str) -> Vec<&str> {
-    // number of substrings: n(n+1)/2
+    // maximum possible number of substrings: n(n+1)/2
     let num_factors = w.len() * (w.len() + 1) / 2 + 1;
     let mut factors = Vec::with_capacity(num_factors);
     factors.push("");
+
+    let unicode_chars = UnicodeSegmentation::graphemes(w, true).collect::<Vec<&str>>();
+
     // sliding window for each possible length of subword
-    for len in 1..w.len() {
-        for pos in 0..(w.len() - len + 1) {
-            let substr = &w[pos..pos + len];
-            // Unique substrings only
+    for len in 1..unicode_chars.len() {
+        for i in 0..(unicode_chars.len() - len + 1) {
+            let start_byte_offset = unicode_chars[..i].iter().map(|b| b.len()).sum::<usize>();
+            let end_byte_offset = unicode_chars[..i + len]
+                .iter()
+                .map(|b| b.len())
+                .sum::<usize>();
+            let substr = &w[start_byte_offset..end_byte_offset];
             if !factors.contains(&substr) {
                 factors.push(substr);
             }
