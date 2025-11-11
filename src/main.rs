@@ -55,9 +55,7 @@ fn find_solutions<'a>(formula: &'a dyn Formula, word: &'a str) -> Vec<Substituti
     let universe = generate_factors(word);
     let all_subs = all_possible_substitutions(free_vars, word, &universe);
     all_subs
-        .iter()
         .filter(|sub| formula.check_substitution(sub, &universe))
-        .cloned()
         .collect()
 }
 
@@ -147,17 +145,19 @@ fn all_possible_substitutions<'a>(
     var_names: Vec<&'a str>,
     w: &'a str,
     universe: &Vec<&'a str>,
-) -> Vec<Substitution<'a>> {
+) -> impl Iterator<Item = Substitution<'a>> {
     let var_vals_iter = std::iter::repeat_n(universe, var_names.len());
-    let subs_iter = var_vals_iter.multi_cartesian_product();
-    let mut substitutions = Vec::with_capacity(subs_iter.try_len().unwrap());
-    for sub_vals in subs_iter {
-        let mut sub = Substitution::new();
-        for i in 0..sub_vals.len() {
-            sub.insert(var_names[i], sub_vals[i]);
+    let mut subs_iter = var_vals_iter.multi_cartesian_product();
+    std::iter::from_fn(move || {
+        if let Some(sub_vals) = subs_iter.next() {
+            let mut sub = Substitution::new();
+            for i in 0..sub_vals.len() {
+                sub.insert(var_names[i], sub_vals[i]);
+            }
+            sub.insert(formula::UNIVERSE_CONSTANT, w);
+            Some(sub)
+        } else {
+            None
         }
-        sub.insert(formula::UNIVERSE_CONSTANT, w);
-        substitutions.push(sub);
-    }
-    substitutions
+    })
 }
