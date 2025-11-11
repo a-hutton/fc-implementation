@@ -6,6 +6,8 @@ use crate::formula::Formula;
 use clap::Parser;
 use itertools::Itertools;
 use std::collections::HashMap;
+use std::fs;
+use unicode_segmentation::UnicodeSegmentation;
 
 fn main() {
     let args = Args::parse();
@@ -16,7 +18,15 @@ fn main() {
         return;
     }
     let parsed_formula = parsed_formula.unwrap();
-    let solutions = find_solutions(&*parsed_formula, args.text.as_str());
+
+    let content: String;
+    let text = if args.file {
+        content = fs::read_to_string(args.text.as_str()).unwrap();
+        content.as_str()
+    } else {
+        args.text.as_str()
+    };
+    let solutions = find_solutions(&*parsed_formula, text);
     println!("Found {} solutions", solutions.len());
     if !args.quiet {
         print_solutions(&solutions, args.text.as_str());
@@ -30,6 +40,9 @@ struct Args {
     pattern: String,
     /// The text universe the search is applied to
     text: String,
+    /// Is the argument [`text`] a text filename
+    #[arg(short, long)]
+    file: bool,
     /// When set to quiet, the full table of found solutions won't be printed, just its size
     #[arg(short, long)]
     quiet: bool,
@@ -110,6 +123,17 @@ fn generate_factors(w: &str) -> Vec<&str> {
     }
     factors.push(w);
     factors
+}
+
+#[test]
+fn test() {
+    let w = "“de”😂🇬🇧";
+    let g = UnicodeSegmentation::graphemes(w, true).collect::<Vec<&str>>();
+    for i in 0..(g.len() - 1) {
+        let start_byte_offset = g[..i].iter().map(|b| b.len()).sum::<usize>();
+        let end_byte_offset = g[..i + 2].iter().map(|b| b.len()).sum::<usize>();
+        println!("{:?}", &w[start_byte_offset..end_byte_offset]);
+    }
 }
 
 /// Represents a substitution (σ in the literature). An assignment mapping variable names to values
