@@ -1,4 +1,4 @@
-use crate::{generate_factors, Substitution};
+use crate::{strings, Substitution};
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -324,7 +324,7 @@ impl Formula for UniversalFormula<'_> {
     /// `true` if every new substitution holds
     fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
         let universe_word = substitution[UNIVERSE_CONSTANT];
-        let all_factors = generate_factors(universe_word);
+        let all_factors = strings::generate_factors(universe_word); // FIXME - unnecessary call
         let mut altered_substitution = substitution.clone();
         for factor in all_factors {
             altered_substitution.insert(self.bound_var, factor);

@@ -169,6 +169,18 @@ fn test_solutions() {
             should_fail: false,
             num_solutions: 4,
         },
+        SolutionTestCase {
+            formula: r#"x="ñ""#, // n + ◌̃
+            universe: "ñ",       // n+◌̃
+            should_fail: false,
+            num_solutions: 1,
+        },
+        SolutionTestCase {
+            formula: r#"x="ñ""#, // n + ◌̃
+            universe: "ñ",       // ñ
+            should_fail: false,
+            num_solutions: 1,
+        },
     ];
     for test in cases {
         println!("Finding solutions for '{}'", test.formula);

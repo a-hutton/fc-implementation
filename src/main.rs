@@ -1,5 +1,6 @@
 mod formula;
 mod formula_parser;
+mod strings;
 mod tests;
 
 use crate::formula::Formula;
@@ -52,7 +53,7 @@ struct Args {
 /// substrings of `word` that satisfy the given formula.
 fn find_solutions<'a>(formula: &'a dyn Formula, word: &'a str) -> Vec<Substitution<'a>> {
     let free_vars = formula.free_vars();
-    let universe = generate_factors(word);
+    let universe = strings::generate_factors(word);
     let all_subs = all_possible_substitutions(free_vars, word, &universe);
     all_subs
         .filter(|sub| formula.check_substitution(sub, &universe))
@@ -92,45 +93,6 @@ fn print_solutions(subs: &Vec<Substitution>, universe: &str) {
             }
         }
         println!()
-    }
-}
-
-/// Constructs a list of all substrings of a given word. This assumes that the empty string is a
-/// factor of all words
-fn generate_factors(w: &str) -> Vec<&str> {
-    // maximum possible number of substrings: n(n+1)/2
-    let num_factors = w.len() * (w.len() + 1) / 2 + 1;
-    let mut factors = Vec::with_capacity(num_factors);
-    factors.push("");
-
-    let unicode_chars = UnicodeSegmentation::graphemes(w, true).collect::<Vec<&str>>();
-
-    // sliding window for each possible length of subword
-    for len in 1..unicode_chars.len() {
-        for i in 0..(unicode_chars.len() - len + 1) {
-            let start_byte_offset = unicode_chars[..i].iter().map(|b| b.len()).sum::<usize>();
-            let end_byte_offset = unicode_chars[..i + len]
-                .iter()
-                .map(|b| b.len())
-                .sum::<usize>();
-            let substr = &w[start_byte_offset..end_byte_offset];
-            if !factors.contains(&substr) {
-                factors.push(substr);
-            }
-        }
-    }
-    factors.push(w);
-    factors
-}
-
-#[test]
-fn test() {
-    let w = "“de”😂🇬🇧";
-    let g = UnicodeSegmentation::graphemes(w, true).collect::<Vec<&str>>();
-    for i in 0..(g.len() - 1) {
-        let start_byte_offset = g[..i].iter().map(|b| b.len()).sum::<usize>();
-        let end_byte_offset = g[..i + 2].iter().map(|b| b.len()).sum::<usize>();
-        println!("{:?}", &w[start_byte_offset..end_byte_offset]);
     }
 }
 
