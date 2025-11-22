@@ -1,5 +1,6 @@
 use std::cmp::min;
 use std::str::from_utf8;
+use suffix::SuffixTable;
 use unicode_normalization::UnicodeNormalization;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -8,7 +9,6 @@ fn create_suffix_array(word: &str) -> Vec<usize> {
     let mut suffix_array: Vec<usize> = Vec::with_capacity(graphemes.len());
     let mut byte_count = word.len();
     for r in graphemes.iter().rev() {
-        println!("{}: {}b", r, r.len());
         byte_count -= r.len();
         suffix_array.push(byte_count);
     }
@@ -76,25 +76,25 @@ fn test_lcp() {
 
 /// Constructs a list of all substrings of a given word. This assumes that the empty string is a
 /// factor of all words
-pub fn generate_factors(word: &str) -> Vec<&str> {
-    let suffix_array = create_suffix_array(word);
-    let lcp_array = create_lcp_array(&suffix_array, word);
+pub fn generate_factors<'a>(word: &'a str, suffix_table: &'a SuffixTable) -> Vec<&'a str> {
+    println!("{:?}", suffix_table);
+    let lcp_array = suffix_table.lcp_lens();
     // n = number of 'characters' in string
-    let n = suffix_array.len();
+    let n = suffix_table.len();
     let mut factors = Vec::with_capacity(n * (n + 1) / 2);
     for i in 0..(n) {
-        let start = suffix_array[i];
+        let start = suffix_table.suffix(i);
         let lcp = lcp_array[i];
-        if start >= n {
+        if start.len() >= n {
             continue;
         }
-        for length in (lcp + 1)..(word.len() + 1 - start) {
-            let factor = from_utf8(&word.as_bytes()[start..(length + start)]);
+        for length in (lcp) as usize..(word.len() - start.len()) {
+            let factor = from_utf8(&start[..length].as_bytes());
             if factor.is_err() {
-                println!("utf8 error at {}..{}", start, length + start);
+                println!("utf8 error at {}..{}", start, length);
                 continue;
             }
-            factors.push(&word[start..(length + start)])
+            factors.push(factor.unwrap());
         }
     }
     factors.push("");
@@ -127,7 +127,8 @@ fn test_generate_factors() {
         },
     ];
     for case in cases {
-        let factors = generate_factors(case.word);
+        let suffix_table = SuffixTable::new(case.word);
+        let factors = generate_factors(case.word, &suffix_table);
         println!("Factors: {:?}", factors);
         assert_eq!(factors.len(), case.num_factors);
     }
