@@ -1,4 +1,3 @@
-use rayon::iter::ParallelIterator;
 mod formula;
 mod formula_parser;
 mod tests;
@@ -6,7 +5,6 @@ mod tests;
 use crate::formula::{Formula, UNIVERSE_CONSTANT};
 use clap::Parser;
 use itertools::Itertools;
-use rayon::iter::IntoParallelRefIterator;
 use std::collections::{HashMap, HashSet};
 
 fn main() {
@@ -43,7 +41,7 @@ fn find_solutions<'a>(formula: &'a dyn Formula, word: &'a str) -> Vec<Substituti
     let free_vars = formula.free_vars();
     let all_subs = all_possible_substitutions(free_vars, formula.constraints(), word);
     all_subs
-        .par_iter()
+        .iter()
         .cloned()
         .filter(|sub| formula.check_substitution(sub))
         .collect()
