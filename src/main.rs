@@ -2,7 +2,7 @@ mod formula;
 mod formula_parser;
 mod tests;
 
-use crate::formula::{Formula, UNIVERSE_CONSTANT};
+use crate::formula::{Formula, VariableRelation};
 use clap::Parser;
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
@@ -83,11 +83,6 @@ fn print_solutions(subs: &Vec<Substitution>, universe: &str) {
     }
 }
 
-#[derive(PartialEq, Clone, Eq, Hash, Debug)]
-enum VariableRelation<'a> {
-    LengthEquality(&'a str, Vec<&'a str>, usize),
-}
-
 /// Constructs a list of all substrings of a given word. This assumes that the empty string is a
 /// factor of all words
 fn generate_factors(w: &str) -> Vec<&str> {
@@ -137,18 +132,8 @@ fn all_possible_substitutions<'a>(
             sub.insert(var_names[i], sub_vals[i]);
         }
         for constraint in constraints.iter() {
-            match constraint {
-                VariableRelation::LengthEquality(x, sum_vars, c) => {
-                    let lhs_len = if *x == UNIVERSE_CONSTANT {
-                        w.len()
-                    } else {
-                        sub[x].len()
-                    };
-                    let rhs_len: usize = sum_vars.iter().map(|var| sub[var].len()).sum();
-                    if lhs_len != (rhs_len + c) {
-                        continue 'sub_loop;
-                    }
-                }
+            if !constraint.check(&sub, &w) {
+                continue 'sub_loop;
             }
         }
         sub.insert(formula::UNIVERSE_CONSTANT, w);

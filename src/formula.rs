@@ -1,4 +1,4 @@
-use crate::{generate_factors, Substitution, VariableRelation};
+use crate::{Substitution, generate_factors};
 use itertools::Itertools;
 use std::collections::HashSet;
 use std::fmt;
@@ -37,6 +37,40 @@ fn substitute<'a>(
         }
     }
     new_terms
+}
+
+#[derive(PartialEq, Clone, Eq, Hash, Debug)]
+pub enum VariableRelation<'a> {
+    /// Constraint that for a given equation, the length of the lhs variable (`x`) must
+    /// be equal to the sum of the length of the rhs variables (`sum_vars`) plus the length
+    /// of any constants (`c`)
+    LengthEquality {
+        lhs: &'a str,
+        rhs_vars: Vec<&'a str>,
+        c: usize,
+    },
+}
+
+impl<'a> VariableRelation<'a> {
+    pub fn check(&self, sub: &Substitution<'a>, w: &'a str) -> bool {
+        match self {
+            VariableRelation::LengthEquality {
+                lhs: x,
+                rhs_vars,
+                c,
+            } => {
+                // if x is $U, it may not be in sub
+                let lhs_len = if *x == UNIVERSE_CONSTANT {
+                    w.len()
+                } else {
+                    sub[x].len()
+                };
+                // sum of the lengths of the rhs variables
+                let rhs_len: usize = rhs_vars.iter().map(|var| sub[var].len()).sum();
+                return lhs_len == (rhs_len + c);
+            }
+        }
+    }
 }
 
 /// A common interface for all word formula types
@@ -120,7 +154,8 @@ impl<'a> Formula for AtomicWordEquation<'a> {
             .sorted()
             .collect();
 
-        let constant: usize = self
+        // sum of the total lengths of all constants
+        let sum_constant_lens: usize = self
             .rhs
             .iter()
             .filter(|item| matches!(item, EquationContent::Constant(_)))
@@ -132,11 +167,11 @@ impl<'a> Formula for AtomicWordEquation<'a> {
                 }
             })
             .sum();
-        HashSet::from([VariableRelation::LengthEquality(
-            self.lhs_variable,
-            rhs,
-            constant,
-        )])
+        HashSet::from([VariableRelation::LengthEquality {
+            lhs: self.lhs_variable,
+            rhs_vars: rhs,
+            c: sum_constant_lens,
+        }])
     }
 }
 

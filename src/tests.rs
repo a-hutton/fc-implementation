@@ -1,6 +1,5 @@
 #![cfg(test)]
 
-use crate::formula::Formula;
 use crate::formula_parser::parse_formula_str;
 use crate::{find_solutions, print_solutions};
 use std::time::Instant;
