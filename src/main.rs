@@ -5,7 +5,7 @@ mod tests;
 use crate::formula::{Formula, VariableRelation};
 use clap::Parser;
 use itertools::Itertools;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 fn main() {
     let args = Args::parse();
@@ -113,7 +113,7 @@ type Substitution<'a> = HashMap<&'a str, &'a str>;
 /// for _n_ variables
 fn all_possible_substitutions<'a>(
     var_names: Vec<&'a str>,
-    constraints: HashSet<VariableRelation>,
+    constraint: VariableRelation,
     w: &'a str,
 ) -> Vec<Substitution<'a>> {
     let factors = generate_factors(w);
@@ -126,17 +126,15 @@ fn all_possible_substitutions<'a>(
     );
     // FIXME: find a better way of allocating size than this - grossly overestimates?
     let mut substitutions = Vec::with_capacity(subs_iter.try_len().unwrap());
-    'sub_loop: for sub_vals in subs_iter {
+    for sub_vals in subs_iter {
         let mut sub = Substitution::new();
         for i in 0..sub_vals.len() {
             sub.insert(var_names[i], sub_vals[i]);
         }
-        for constraint in constraints.iter() {
-            if !constraint.check(&sub, &w) {
-                continue 'sub_loop;
-            }
-        }
         sub.insert(formula::UNIVERSE_CONSTANT, w);
+        if !constraint.check(&sub, w) {
+            continue;
+        }
         substitutions.push(sub);
     }
     println!("Trimmed to {}", substitutions.len());

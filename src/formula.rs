@@ -1,6 +1,5 @@
-use crate::{Substitution, generate_factors};
+use crate::{generate_factors, Substitution};
 use itertools::Itertools;
-use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -49,6 +48,17 @@ pub enum VariableRelation<'a> {
         rhs_vars: Vec<&'a str>,
         c: usize,
     },
+    /// Set of constraints that must _all_ hold
+    Conjunction {
+        constraints: Vec<VariableRelation<'a>>,
+    },
+    /// Set of constraints, of which (at least) _one_ must hold
+    Disjunction {
+        constraints: Vec<VariableRelation<'a>>,
+    },
+    Negation {
+        inner: Box<VariableRelation<'a>>,
+    },
 }
 
 impl<'a> VariableRelation<'a> {
@@ -67,8 +77,30 @@ impl<'a> VariableRelation<'a> {
                 };
                 // sum of the lengths of the rhs variables
                 let rhs_len: usize = rhs_vars.iter().map(|var| sub[var].len()).sum();
-                return lhs_len == (rhs_len + c);
+                lhs_len == (rhs_len + c)
             }
+
+            VariableRelation::Conjunction { constraints } => {
+                // all constraints must hold
+                for constraint in constraints {
+                    if !constraint.check(sub, w) {
+                        return false;
+                    }
+                }
+                true
+            }
+
+            VariableRelation::Disjunction { constraints } => {
+                // only one constraint must hold
+                for constraint in constraints {
+                    if constraint.check(sub, w) {
+                        return true;
+                    }
+                }
+                false
+            }
+
+            VariableRelation::Negation { inner } => !inner.check(sub, w),
         }
     }
 }
@@ -77,7 +109,7 @@ impl<'a> VariableRelation<'a> {
 pub trait Formula: Sync + fmt::Display + fmt::Debug {
     fn free_vars(&self) -> Vec<&str>;
     fn check_substitution(&self, substitution: &Substitution) -> bool;
-    fn constraints(&'_ self) -> HashSet<VariableRelation<'_>>;
+    fn constraints(&'_ self) -> VariableRelation<'_>;
 }
 
 /// An 'atomic' equation where the left hand side is a single variable, and the right hand side is
@@ -139,7 +171,7 @@ impl<'a> Formula for AtomicWordEquation<'a> {
         lhs_sub == rhs_sub
     }
 
-    fn constraints(&'_ self) -> HashSet<VariableRelation<'_>> {
+    fn constraints(&'_ self) -> VariableRelation<'_> {
         let rhs: Vec<_> = self
             .rhs
             .iter()
@@ -167,11 +199,11 @@ impl<'a> Formula for AtomicWordEquation<'a> {
                 }
             })
             .sum();
-        HashSet::from([VariableRelation::LengthEquality {
+        VariableRelation::LengthEquality {
             lhs: self.lhs_variable,
             rhs_vars: rhs,
             c: sum_constant_lens,
-        }])
+        }
     }
 }
 
@@ -228,11 +260,12 @@ impl Formula for ConjunctiveFormula<'_> {
         lhs_holds && rhs_holds
     }
 
-    fn constraints(&'_ self) -> HashSet<VariableRelation<'_>> {
-        let mut lhs_constraints = self.lhs.constraints();
+    fn constraints(&'_ self) -> VariableRelation<'_> {
+        let lhs_constraints = self.lhs.constraints();
         let rhs_constraints = self.rhs.constraints();
-        lhs_constraints.extend(rhs_constraints);
-        lhs_constraints
+        VariableRelation::Conjunction {
+            constraints: vec![lhs_constraints, rhs_constraints],
+        }
     }
 }
 
@@ -278,8 +311,12 @@ impl Formula for DisjunctiveFormula<'_> {
         lhs_holds || rhs_holds
     }
 
-    fn constraints(&'_ self) -> HashSet<VariableRelation<'_>> {
-        todo!()
+    fn constraints(&'_ self) -> VariableRelation<'_> {
+        let lhs_constraints = self.lhs.constraints();
+        let rhs_constraints = self.rhs.constraints();
+        VariableRelation::Disjunction {
+            constraints: vec![lhs_constraints, rhs_constraints],
+        }
     }
 }
 
@@ -311,8 +348,10 @@ impl Formula for NegativeFormula<'_> {
         !self.inner.check_substitution(substitution)
     }
 
-    fn constraints(&'_ self) -> HashSet<VariableRelation<'_>> {
-        todo!()
+    fn constraints(&'_ self) -> VariableRelation<'_> {
+        VariableRelation::Negation {
+            inner: Box::from(self.inner.constraints()),
+        }
     }
 }
 
@@ -369,8 +408,14 @@ impl Formula for ExistentialFormula<'_> {
         false
     }
 
-    fn constraints(&'_ self) -> HashSet<VariableRelation<'_>> {
-        todo!()
+    fn constraints(&'_ self) -> VariableRelation<'_> {
+        //TODO: return a constraint that is the inner formula's constraint(s) with any references
+        // to quantified variables removed
+        VariableRelation::LengthEquality {
+            lhs: UNIVERSE_CONSTANT,
+            rhs_vars: vec![UNIVERSE_CONSTANT],
+            c: 0,
+        }
     }
 }
 
@@ -428,8 +473,14 @@ impl Formula for UniversalFormula<'_> {
         true
     }
 
-    fn constraints(&'_ self) -> HashSet<VariableRelation<'_>> {
-        todo!()
+    fn constraints(&'_ self) -> VariableRelation<'_> {
+        //TODO: return a constraint that is the inner formula's constraint(s) with any references
+        // to quantified variables removed
+        VariableRelation::LengthEquality {
+            lhs: UNIVERSE_CONSTANT,
+            rhs_vars: vec![UNIVERSE_CONSTANT],
+            c: 0,
+        }
     }
 }
 
