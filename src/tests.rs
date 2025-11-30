@@ -156,6 +156,19 @@ fn test_solutions() {
             should_fail: false,
             num_solutions: 0,
         },
+        // Unicode
+        SolutionTestCase {
+            formula: r#"x=y "a""#,
+            universe: "ïa",
+            should_fail: false,
+            num_solutions: 2,
+        },
+        SolutionTestCase {
+            formula: r#"x=y "a""#,
+            universe: "æéɷa",
+            should_fail: false,
+            num_solutions: 4,
+        },
     ];
     for test in cases {
         println!("Finding solutions for '{}'", test.formula);

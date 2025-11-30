@@ -6,6 +6,8 @@ use crate::formula::{Formula, VariableRelation};
 use clap::Parser;
 use itertools::Itertools;
 use std::collections::HashMap;
+use std::fs;
+use unicode_segmentation::UnicodeSegmentation;
 
 fn main() {
     let args = Args::parse();
@@ -16,7 +18,15 @@ fn main() {
         return;
     }
     let parsed_formula = parsed_formula.unwrap();
-    let solutions = find_solutions(&*parsed_formula, args.text.as_str());
+
+    let content: String;
+    let text = if args.file {
+        content = fs::read_to_string(args.text.as_str()).unwrap();
+        content.as_str()
+    } else {
+        args.text.as_str()
+    };
+    let solutions = find_solutions(&*parsed_formula, text);
     println!("Found {} solutions", solutions.len());
     if !args.quiet {
         print_solutions(&solutions, args.text.as_str());
@@ -30,6 +40,9 @@ struct Args {
     pattern: String,
     /// The text universe the search is applied to
     text: String,
+    /// Is the argument [`text`] a text filename
+    #[arg(short, long)]
+    file: bool,
     /// When set to quiet, the full table of found solutions won't be printed, just its size
     #[arg(short, long)]
     quiet: bool,
@@ -39,9 +52,11 @@ struct Args {
 /// substrings of `word` that satisfy the given formula.
 fn find_solutions<'a>(formula: &'a dyn Formula, word: &'a str) -> Vec<Substitution<'a>> {
     let free_vars = formula.free_vars();
-    let all_subs = all_possible_substitutions(free_vars, formula.constraints(), word);
+    let universe = generate_factors(word);
+    let all_subs = all_possible_substitutions(free_vars, formula.constraints(), word, &universe);
+    let universe = generate_factors(word);
     all_subs
-        .filter(|sub| formula.check_substitution(sub))
+        .filter(|sub| formula.check_substitution(sub, &universe))
         .collect()
 }
 
@@ -54,7 +69,7 @@ fn print_solutions(subs: &Vec<Substitution>, universe: &str) {
     let mut var_names = subs[0].keys().collect::<Vec<_>>();
     var_names.sort();
     // guaranteed to be the longest variable, helps for printing as a 'table'
-    let universe_len = universe.len();
+    let universe_len = UnicodeSegmentation::graphemes(universe, true).count();
 
     // print var names
     for (i, var_name) in var_names.iter().enumerate() {
@@ -84,15 +99,22 @@ fn print_solutions(subs: &Vec<Substitution>, universe: &str) {
 /// Constructs a list of all substrings of a given word. This assumes that the empty string is a
 /// factor of all words
 fn generate_factors(w: &str) -> Vec<&str> {
-    // number of substrings: n(n+1)/2
+    // maximum possible number of substrings: n(n+1)/2
     let num_factors = w.len() * (w.len() + 1) / 2 + 1;
     let mut factors = Vec::with_capacity(num_factors);
     factors.push("");
+
+    let unicode_chars = UnicodeSegmentation::graphemes(w, true).collect::<Vec<&str>>();
+
     // sliding window for each possible length of subword
-    for len in 1..w.len() {
-        for pos in 0..(w.len() - len + 1) {
-            let substr = &w[pos..pos + len];
-            // Unique substrings only
+    for len in 1..unicode_chars.len() {
+        for i in 0..(unicode_chars.len() - len + 1) {
+            let start_byte_offset = unicode_chars[..i].iter().map(|b| b.len()).sum::<usize>();
+            let end_byte_offset = unicode_chars[..i + len]
+                .iter()
+                .map(|b| b.len())
+                .sum::<usize>();
+            let substr = &w[start_byte_offset..end_byte_offset];
             if !factors.contains(&substr) {
                 factors.push(substr);
             }
@@ -100,6 +122,17 @@ fn generate_factors(w: &str) -> Vec<&str> {
     }
     factors.push(w);
     factors
+}
+
+#[test]
+fn test() {
+    let w = "“de”😂🇬🇧";
+    let g = UnicodeSegmentation::graphemes(w, true).collect::<Vec<&str>>();
+    for i in 0..(g.len() - 1) {
+        let start_byte_offset = g[..i].iter().map(|b| b.len()).sum::<usize>();
+        let end_byte_offset = g[..i + 2].iter().map(|b| b.len()).sum::<usize>();
+        println!("{:?}", &w[start_byte_offset..end_byte_offset]);
+    }
 }
 
 /// Represents a substitution (σ in the literature). An assignment mapping variable names to values
@@ -113,10 +146,10 @@ fn all_possible_substitutions<'a>(
     var_names: Vec<&'a str>,
     constraint: VariableRelation,
     w: &'a str,
+    universe: &Vec<&'a str>,
 ) -> impl Iterator<Item = Substitution<'a>> {
-    let factors = generate_factors(w);
 
-    let var_vals_iter = std::iter::repeat_n(factors, var_names.len());
+    let var_vals_iter = std::iter::repeat_n(universe, var_names.len());
     let mut subs_iter = var_vals_iter.multi_cartesian_product();
 
     std::iter::from_fn(move || {
