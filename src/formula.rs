@@ -459,10 +459,8 @@ impl Formula for UniversalFormula<'_> {
     /// new substitution is checked on the inner [`Formula::check_substitution`], returning
     /// `true` if every new substitution holds
     fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
-        let universe_word = substitution[UNIVERSE_CONSTANT];
-        let all_factors = generate_factors(universe_word);
         let mut altered_substitution = substitution.clone();
-        for factor in all_factors {
+        for factor in universe {
             altered_substitution.insert(self.bound_var, factor);
             let holds = self
                 .inner
