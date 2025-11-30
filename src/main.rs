@@ -41,8 +41,6 @@ fn find_solutions<'a>(formula: &'a dyn Formula, word: &'a str) -> Vec<Substituti
     let free_vars = formula.free_vars();
     let all_subs = all_possible_substitutions(free_vars, formula.constraints(), word);
     all_subs
-        .iter()
-        .cloned()
         .filter(|sub| formula.check_substitution(sub))
         .collect()
 }
@@ -115,28 +113,26 @@ fn all_possible_substitutions<'a>(
     var_names: Vec<&'a str>,
     constraint: VariableRelation,
     w: &'a str,
-) -> Vec<Substitution<'a>> {
+) -> impl Iterator<Item = Substitution<'a>> {
     let factors = generate_factors(w);
 
     let var_vals_iter = std::iter::repeat_n(factors, var_names.len());
-    let subs_iter = var_vals_iter.multi_cartesian_product();
-    println!(
-        "Number of possible substitutions: {}",
-        subs_iter.try_len().unwrap()
-    );
-    // FIXME: find a better way of allocating size than this - grossly overestimates?
-    let mut substitutions = Vec::with_capacity(subs_iter.try_len().unwrap());
-    for sub_vals in subs_iter {
+    let mut subs_iter = var_vals_iter.multi_cartesian_product();
+
+    std::iter::from_fn(move || {
+        let mut constraints_satisfied = false;
         let mut sub = Substitution::new();
-        for i in 0..sub_vals.len() {
-            sub.insert(var_names[i], sub_vals[i]);
+        while !constraints_satisfied {
+            let next = subs_iter.next();
+            next.as_ref()?;
+            let sub_vals = next.unwrap();
+            sub = Substitution::new();
+            for i in 0..sub_vals.len() {
+                sub.insert(var_names[i], sub_vals[i]);
+            }
+            sub.insert(formula::UNIVERSE_CONSTANT, w);
+            constraints_satisfied = constraint.check(&sub, w);
         }
-        sub.insert(formula::UNIVERSE_CONSTANT, w);
-        if !constraint.check(&sub, w) {
-            continue;
-        }
-        substitutions.push(sub);
-    }
-    println!("Trimmed to {}", substitutions.len());
-    substitutions
+        Some(sub)
+    })
 }
