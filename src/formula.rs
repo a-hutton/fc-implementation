@@ -1,4 +1,4 @@
-use crate::{generate_factors, Substitution};
+use crate::Substitution;
 use itertools::Itertools;
 use std::fmt;
 use std::fmt::Formatter;
@@ -59,6 +59,17 @@ pub enum VariableRelation<'a> {
     Negation {
         inner: Box<VariableRelation<'a>>,
     },
+
+    /// The (value of) variable with name `prefix_var` appears at the start of `lhs`
+    VarPrefix {
+        lhs: &'a str,
+        prefix_var: &'a str,
+    },
+    /// The string `prefix` appears at the start of the value of variable `lhs`
+    ConstPrefix {
+        lhs: &'a str,
+        prefix: &'a str,
+    },
 }
 
 impl<'a> VariableRelation<'a> {
@@ -101,6 +112,11 @@ impl<'a> VariableRelation<'a> {
             }
 
             VariableRelation::Negation { inner } => !inner.check(sub, w),
+            VariableRelation::VarPrefix {
+                prefix_var: prefix,
+                lhs,
+            } => sub[lhs].starts_with(sub[prefix]),
+            VariableRelation::ConstPrefix { lhs, prefix } => sub[lhs].starts_with(prefix),
         }
     }
 }
@@ -198,10 +214,32 @@ impl<'a> Formula for AtomicWordEquation<'a> {
                 }
             })
             .sum();
-        VariableRelation::LengthEquality {
+
+        let length_equality = VariableRelation::LengthEquality {
             lhs: self.lhs_variable,
             rhs_vars: rhs,
             c: sum_constant_lens,
+        };
+
+        match self.rhs[0] {
+            EquationContent::Variable(var) => VariableRelation::Conjunction {
+                constraints: vec![
+                    VariableRelation::VarPrefix {
+                        lhs: self.lhs_variable,
+                        prefix_var: var,
+                    },
+                    length_equality,
+                ],
+            },
+            EquationContent::Constant(constant) => VariableRelation::Conjunction {
+                constraints: vec![
+                    VariableRelation::ConstPrefix {
+                        lhs: self.lhs_variable,
+                        prefix: constant,
+                    },
+                    length_equality,
+                ],
+            },
         }
     }
 }
