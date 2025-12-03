@@ -26,10 +26,11 @@ fn main() {
     } else {
         args.text.as_str()
     };
-    let solutions = find_solutions(&*parsed_formula, text);
-    println!("Found {} solutions", solutions.len());
+    let factors = generate_factors(text);
+    let solutions = find_solutions(&*parsed_formula, text, &factors);
+    println!("Found {:?} solutions", solutions.try_len());
     if !args.quiet {
-        print_solutions(&solutions, args.text.as_str());
+        print_solutions(solutions, args.text.as_str(), parsed_formula.free_vars());
     }
 }
 
@@ -50,22 +51,30 @@ struct Args {
 
 /// Find all the assignments to variables in a formula based on values in the universe of
 /// substrings of `word` that satisfy the given formula.
-fn find_solutions<'a>(formula: &'a dyn Formula, word: &'a str) -> Vec<Substitution<'a>> {
+fn find_solutions<'a>(
+    formula: &'a dyn Formula,
+    word: &'a str,
+    universe: &[&'a str],
+) -> impl Iterator<Item = Substitution<'a>> {
     let free_vars = formula.free_vars();
-    let universe = generate_factors(word);
-    let all_subs = all_possible_substitutions(free_vars, word, &universe);
+    let all_subs = all_possible_substitutions(free_vars, word, universe);
     all_subs
-        .filter(|sub| formula.check_substitution(sub, &universe))
-        .collect()
+        .filter(move |sub| formula.check_substitution(sub, universe))
+        .peekable()
 }
 
 /// Prints to stdout a pretty-printed CSV formatted table of all substitutions
-fn print_solutions(subs: &Vec<Substitution>, universe: &str) {
-    if subs.is_empty() {
-        println!("No solutions found");
-        return;
+fn print_solutions<'a>(
+    subs: impl Iterator<Item = Substitution<'a>>,
+    universe: &str,
+    mut var_names: Vec<&'a str>,
+) -> usize {
+    let mut peekable = subs.peekable();
+    if peekable.peek().is_none() {
+        println!("No substitutions found");
+        return 0;
     }
-    let mut var_names = subs[0].keys().collect::<Vec<_>>();
+
     var_names.sort();
     // guaranteed to be the longest variable, helps for printing as a 'table'
     let universe_len = UnicodeSegmentation::graphemes(universe, true).count();
@@ -79,20 +88,23 @@ fn print_solutions(subs: &Vec<Substitution>, universe: &str) {
     }
     println!();
 
-    for sub in subs {
+    let mut count = 0;
+    for sub in peekable {
         for (i, key) in var_names.iter().enumerate() {
-            let val = if sub[**key].is_empty() {
+            let val = if sub[*key].is_empty() {
                 "ε"
             } else {
-                sub[**key]
+                sub[*key]
             };
             print!("{val:width$}", val = val, width = universe_len);
             if i < var_names.len() - 1 {
                 print!(", ")
             }
         }
-        println!()
+        println!();
+        count += 1;
     }
+    count
 }
 
 /// Constructs a list of all substrings of a given word. This assumes that the empty string is a
@@ -123,17 +135,6 @@ fn generate_factors(w: &str) -> Vec<&str> {
     factors
 }
 
-#[test]
-fn test() {
-    let w = "“de”😂🇬🇧";
-    let g = UnicodeSegmentation::graphemes(w, true).collect::<Vec<&str>>();
-    for i in 0..(g.len() - 1) {
-        let start_byte_offset = g[..i].iter().map(|b| b.len()).sum::<usize>();
-        let end_byte_offset = g[..i + 2].iter().map(|b| b.len()).sum::<usize>();
-        println!("{:?}", &w[start_byte_offset..end_byte_offset]);
-    }
-}
-
 /// Represents a substitution (σ in the literature). An assignment mapping variable names to values
 /// from the universe
 type Substitution<'a> = HashMap<&'a str, &'a str>;
@@ -144,7 +145,7 @@ type Substitution<'a> = HashMap<&'a str, &'a str>;
 fn all_possible_substitutions<'a>(
     var_names: Vec<&'a str>,
     w: &'a str,
-    universe: &Vec<&'a str>,
+    universe: &[&'a str],
 ) -> impl Iterator<Item = Substitution<'a>> {
     let var_vals_iter = std::iter::repeat_n(universe, var_names.len());
     let mut subs_iter = var_vals_iter.multi_cartesian_product();
