@@ -166,19 +166,7 @@ impl<'a> Formula for AtomicWordEquation<'a> {
 
     /// The simple atomic case, where the left and right -hand sides are replaced using
     /// [`substitute`] and compared with simple string comparison
-    fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
-        if !substitution.contains_key(UNIVERSE_CONSTANT) {
-            panic!("Missing universe constant `$U` (𝔲) in substitution")
-        }
-        for (key, val) in substitution.iter() {
-            if !universe.contains(val) {
-                panic!(
-                    "Substitution {} for variable {} is not in the universe",
-                    val, key
-                );
-            }
-        }
-
+    fn check_substitution(&self, substitution: &Substitution, _universe: &[&str]) -> bool {
         let lhs_vec = vec![EquationContent::Variable(self.lhs_variable)];
         let lhs_sub = substitute(&lhs_vec, substitution).join("");
         let rhs_sub = substitute(&self.rhs, substitution).join("");
