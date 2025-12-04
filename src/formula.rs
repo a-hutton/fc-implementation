@@ -85,14 +85,6 @@ impl<'a> Formula for AtomicWordEquation<'a> {
         if !substitution.contains_key(UNIVERSE_CONSTANT) {
             panic!("Missing universe constant `$U` (𝔲) in substitution")
         }
-        for (key, val) in substitution.iter() {
-            if !universe.contains(val) {
-                panic!(
-                    "Substitution {} for variable {} is not in the universe",
-                    val, key
-                );
-            }
-        }
 
         let lhs_vec = vec![EquationContent::Variable(self.lhs_variable)];
         let lhs_sub = substitute(&lhs_vec, substitution).join("");
