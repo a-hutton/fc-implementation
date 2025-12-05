@@ -2,10 +2,9 @@ mod formula;
 mod formula_parser;
 mod tests;
 
-use crate::formula::{Formula, VariableRelation};
+use crate::formula::{EquationContent, Formula, VariableRelation, UNIVERSE_CONSTANT};
 use clap::Parser;
 use itertools::Itertools;
-use rustc_hash::FxHashMap;
 use std::fs;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -26,7 +25,8 @@ fn main() {
     } else {
         args.text.as_str()
     };
-    let solutions = find_solutions(&*parsed_formula, text);
+    let universe = generate_factors(text);
+    let solutions = find_solutions(&*parsed_formula, text, &universe);
     println!("Found {} solutions", solutions.len());
     if !args.quiet {
         print_solutions(&solutions, args.text.as_str());
@@ -50,10 +50,13 @@ struct Args {
 
 /// Find all the assignments to variables in a formula based on values in the universe of
 /// substrings of `word` that satisfy the given formula.
-fn find_solutions<'a>(formula: &'a dyn Formula, word: &'a str) -> Vec<Substitution<'a>> {
+fn find_solutions<'a>(
+    formula: &'a dyn Formula,
+    word: &'a str,
+    universe: &'a Vec<&str>,
+) -> Vec<Substitution<'a>> {
     let free_vars = formula.free_vars();
-    let universe = generate_factors(word);
-    let all_subs = all_possible_substitutions(free_vars, formula.constraints(), word, &universe);
+    let all_subs = all_possible_substitutions(free_vars, formula.constraints(), word, universe);
     let universe = generate_factors(word);
     all_subs
         .filter(|sub| formula.check_substitution(sub, &universe))
@@ -66,7 +69,7 @@ fn print_solutions(subs: &Vec<Substitution>, universe: &str) {
         println!("No solutions found");
         return;
     }
-    let mut var_names = subs[0].keys().collect::<Vec<_>>();
+    let mut var_names = subs[0].keys.clone();
     var_names.sort();
     // guaranteed to be the longest variable, helps for printing as a 'table'
     let universe_len = UnicodeSegmentation::graphemes(universe, true).count();
@@ -81,11 +84,11 @@ fn print_solutions(subs: &Vec<Substitution>, universe: &str) {
     println!();
 
     for sub in subs {
-        for (i, key) in var_names.iter().enumerate() {
-            let val = if sub[**key].is_empty() {
+        for i in 0..sub.keys.len() {
+            let val = if sub.values[i].is_empty() {
                 "ε"
             } else {
-                sub[**key]
+                sub.values[i]
             };
             print!("{val:width$}", val = val, width = universe_len);
             if i < var_names.len() - 1 {
@@ -137,7 +140,63 @@ fn test() {
 
 /// Represents a substitution (σ in the literature). An assignment mapping variable names to values
 /// from the universe
-type Substitution<'a> = FxHashMap<&'a str, &'a str>;
+struct Substitution<'a> {
+    keys: Vec<&'a str>,
+    values: Vec<&'a str>,
+    universe_constant: &'a str,
+}
+impl<'a> Substitution<'a> {
+    fn from_vars(vars: Vec<&'a str>, w: &'a str) -> Self {
+        let len = vars.len();
+        Substitution {
+            keys: vars,
+            values: Vec::with_capacity(len),
+            universe_constant: w,
+        }
+    }
+
+    fn value(&self, var: &str) -> &str {
+        if var == UNIVERSE_CONSTANT {
+            self.universe_constant
+        } else {
+            let mut var_idx = 0;
+            for key in &self.keys {
+                if var == *key {
+                    break;
+                }
+                var_idx += 1;
+            }
+            self.values[var_idx]
+        }
+    }
+
+    fn apply(&self, terms: &Vec<EquationContent<'a>>) -> Vec<&'a str> {
+        let mut new_terms = Vec::with_capacity(terms.len());
+        for term in terms {
+            match term {
+                EquationContent::Variable(v) => {
+                    let val = if *v == UNIVERSE_CONSTANT {
+                        self.universe_constant
+                    } else {
+                        let mut var_idx = 0;
+                        for key in &self.keys {
+                            if *v == *key {
+                                break;
+                            }
+                            var_idx += 1;
+                        }
+                        self.values[var_idx]
+                    };
+                    new_terms.push(val);
+                }
+                EquationContent::Constant(c) => {
+                    new_terms.push(*c);
+                }
+            }
+        }
+        new_terms
+    }
+}
 
 /// Constructs all possible assignments from a universe of factors of the universe constant `w`
 /// to a given list of variables. Works by brute force over the Cartesian product repeated _n_ times
@@ -146,23 +205,21 @@ fn all_possible_substitutions<'a>(
     var_names: Vec<&'a str>,
     constraint: VariableRelation,
     w: &'a str,
-    universe: &Vec<&'a str>,
+    universe: &'a Vec<&str>,
 ) -> impl Iterator<Item = Substitution<'a>> {
     let var_vals_iter = std::iter::repeat_n(universe, var_names.len());
     let mut subs_iter = var_vals_iter.multi_cartesian_product();
 
     std::iter::from_fn(move || {
         let mut constraints_satisfied = false;
-        let mut sub = Substitution::default();
+        let mut sub = Substitution::from_vars(var_names.clone(), w);
         while !constraints_satisfied {
             let next = subs_iter.next();
-            next.as_ref()?;
-            let sub_vals = next.unwrap();
-            sub.clear();
-            for i in 0..sub_vals.len() {
-                sub.insert(var_names[i], sub_vals[i]);
+            sub.values.clear();
+            let sub_vals = next.as_ref()?;
+            for v in sub_vals {
+                sub.values.push(v);
             }
-            sub.insert(formula::UNIVERSE_CONSTANT, w);
             constraints_satisfied = constraint.check(&sub, w);
         }
         Some(sub)
