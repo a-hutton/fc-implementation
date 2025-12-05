@@ -148,7 +148,6 @@ fn all_possible_substitutions<'a>(
     w: &'a str,
     universe: &Vec<&'a str>,
 ) -> impl Iterator<Item = Substitution<'a>> {
-
     let var_vals_iter = std::iter::repeat_n(universe, var_names.len());
     let mut subs_iter = var_vals_iter.multi_cartesian_product();
 
@@ -159,7 +158,7 @@ fn all_possible_substitutions<'a>(
             let next = subs_iter.next();
             next.as_ref()?;
             let sub_vals = next.unwrap();
-            sub = Substitution::new();
+            sub.clear();
             for i in 0..sub_vals.len() {
                 sub.insert(var_names[i], sub_vals[i]);
             }
