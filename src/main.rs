@@ -5,7 +5,7 @@ mod tests;
 use crate::formula::{Formula, VariableRelation};
 use clap::Parser;
 use itertools::Itertools;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::fs;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -137,7 +137,7 @@ fn test() {
 
 /// Represents a substitution (σ in the literature). An assignment mapping variable names to values
 /// from the universe
-type Substitution<'a> = HashMap<&'a str, &'a str>;
+type Substitution<'a> = FxHashMap<&'a str, &'a str>;
 
 /// Constructs all possible assignments from a universe of factors of the universe constant `w`
 /// to a given list of variables. Works by brute force over the Cartesian product repeated _n_ times
@@ -148,18 +148,17 @@ fn all_possible_substitutions<'a>(
     w: &'a str,
     universe: &Vec<&'a str>,
 ) -> impl Iterator<Item = Substitution<'a>> {
-
     let var_vals_iter = std::iter::repeat_n(universe, var_names.len());
     let mut subs_iter = var_vals_iter.multi_cartesian_product();
 
     std::iter::from_fn(move || {
         let mut constraints_satisfied = false;
-        let mut sub = Substitution::new();
+        let mut sub = Substitution::default();
         while !constraints_satisfied {
             let next = subs_iter.next();
             next.as_ref()?;
             let sub_vals = next.unwrap();
-            sub = Substitution::new();
+            sub = Substitution::default();
             for i in 0..sub_vals.len() {
                 sub.insert(var_names[i], sub_vals[i]);
             }
