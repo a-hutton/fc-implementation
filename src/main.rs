@@ -158,7 +158,7 @@ fn all_possible_substitutions<'a>(
             let next = subs_iter.next();
             next.as_ref()?;
             let sub_vals = next.unwrap();
-            sub = Substitution::default();
+            sub.clear();
             for i in 0..sub_vals.len() {
                 sub.insert(var_names[i], sub_vals[i]);
             }
