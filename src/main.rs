@@ -28,9 +28,11 @@ fn main() {
     };
     let factors = generate_factors(text);
     let solutions = find_solutions(&*parsed_formula, text, &factors);
-    println!("Found {:?} solutions", solutions.try_len());
     if !args.quiet {
         print_solutions(solutions, args.text.as_str(), parsed_formula.free_vars());
+    } else {
+        let count = solutions.fold(0, |x, _| x + 1);
+        println!("Found {} solutions", count);
     }
 }
 
