@@ -1,4 +1,6 @@
-use crate::{generate_factors, Substitution};
+use crate::{generate_factors, strutils, Substitution};
+use itertools::Itertools;
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -41,6 +43,7 @@ fn substitute<'a>(
 pub trait Formula: fmt::Display + fmt::Debug {
     fn free_vars(&self) -> Vec<&str>;
     fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool;
+    fn all_solutions(&self, universe: &[&str]);
 }
 
 /// An 'atomic' equation where the left hand side is a single variable, and the right hand side is
@@ -81,17 +84,9 @@ impl<'a> Formula for AtomicWordEquation<'a> {
 
     /// The simple atomic case, where the left and right -hand sides are replaced using
     /// [`substitute`] and compared with simple string comparison
-    fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
+    fn check_substitution(&self, substitution: &Substitution, _: &[&str]) -> bool {
         if !substitution.contains_key(UNIVERSE_CONSTANT) {
             panic!("Missing universe constant `$U` (𝔲) in substitution")
-        }
-        for (key, val) in substitution.iter() {
-            if !universe.contains(val) {
-                panic!(
-                    "Substitution {} for variable {} is not in the universe",
-                    val, key
-                );
-            }
         }
 
         let lhs_vec = vec![EquationContent::Variable(self.lhs_variable)];
@@ -99,6 +94,215 @@ impl<'a> Formula for AtomicWordEquation<'a> {
         let rhs_sub = substitute(&self.rhs, substitution).join("");
 
         lhs_sub == rhs_sub
+    }
+
+    fn all_solutions(&self, universe: &[&str]) {
+        // TODO - special case for $U
+        let mut eq_var_indices = HashMap::new();
+        let mut eq_const_indices = Vec::new();
+        let mut eq_consts = Vec::new();
+
+        let mut rhs_vars = Vec::with_capacity(self.rhs.len());
+        for content in &self.rhs {
+            // if term is a free variable, add to vec if not already there
+            if let EquationContent::Variable(var) = content
+                && !rhs_vars.contains(var)
+                && *var != UNIVERSE_CONSTANT
+            {
+                rhs_vars.push(*var);
+            }
+        }
+
+        for (i, pattern_item) in self.rhs.iter().enumerate() {
+            match pattern_item {
+                EquationContent::Variable(name) => match eq_var_indices.get_mut(name) {
+                    None => {
+                        let mut vec = Vec::with_capacity(self.rhs.len());
+                        vec.push(i);
+                        eq_var_indices.insert(name, vec);
+                    }
+                    Some(vec) => vec.push(i),
+                },
+                EquationContent::Constant(value) => {
+                    eq_const_indices.push((value, i));
+                    eq_consts.push(*value);
+                }
+            }
+        }
+        let mut substitutions = Vec::new();
+        for &lhs_value in universe {
+            // For each possible value for the lhs variable
+            let subs_for_val = self.rhs_assignments(lhs_value);
+            substitutions.extend(subs_for_val);
+        }
+        println!("{:?}", substitutions);
+    }
+}
+
+enum PatternPositions {
+    Variable(Option<Vec<(usize, usize)>>),
+    Constant(Vec<(usize, usize)>),
+}
+
+#[derive(Clone)]
+enum LookBehind {
+    Variables(Vec<Vec<(usize, usize)>>),
+    Constant(Vec<(usize, usize)>),
+}
+
+impl<'a> AtomicWordEquation<'a> {
+    fn rhs_assignments(&self, lhs_value: &'a str) -> Vec<Substitution<'a>> {
+        let lhs_chars = strutils::CharOperator::new(lhs_value);
+
+        // TODO - filter out duplicates.... somehow
+        // TODO - filter out obvious fails as consts must be in sequence
+        let mut pattern_positions = Vec::with_capacity(self.rhs.len());
+        for p in self.rhs.iter() {
+            match p {
+                EquationContent::Variable(_) => {
+                    pattern_positions.push(PatternPositions::Variable(None))
+                }
+                EquationContent::Constant(val) => {
+                    let const_positions = lhs_chars.find(val);
+                    if const_positions.is_empty() {
+                        // required const not found
+                        return vec![];
+                    }
+
+                    let const_positions = const_positions
+                        .into_iter()
+                        .map(|i| (i, i + val.len()))
+                        .collect_vec();
+                    pattern_positions.push(PatternPositions::Constant(const_positions));
+                }
+            }
+        }
+
+        let start_position = LookBehind::Constant(vec![(0, 0)]);
+        let end_position = vec![(lhs_chars.len(), lhs_chars.len())];
+        for i in 0..self.rhs.len() {
+            let is_start = i == 0;
+            let is_final = i == self.rhs.len() - 1;
+            // Look ahead and look behind are either a single const, or a group of variables until the next const.
+
+            // look behind
+            let mut look_behinds = Vec::with_capacity(i);
+            if is_start {
+                look_behinds.push(start_position.clone());
+            } else {
+                let mut prev = &pattern_positions[i - 1];
+                match &prev {
+                    PatternPositions::Variable(_) => {
+                        let mut is_var = true;
+                        let mut j = 1;
+                        while is_var {
+                            match prev {
+                                PatternPositions::Variable(_) => {
+                                    if j > i {
+                                        break;
+                                    }
+                                    let prev_look_behind = LookBehind::Variables(vec![]);
+                                    look_behinds.push(prev_look_behind);
+                                    prev = &pattern_positions[i - j];
+                                    j += 1;
+                                }
+                                PatternPositions::Constant(_) => {
+                                    is_var = false;
+                                }
+                            }
+                        }
+                    }
+                    PatternPositions::Constant(c) => {
+                        let c = LookBehind::Constant(c.clone());
+                        look_behinds.push(c);
+                    }
+                }
+            }
+
+            // look ahead
+            let mut look_ahead = None;
+            if is_final {
+                look_ahead = Some(&end_position);
+            } else {
+                let next = &pattern_positions[i + 1];
+                match &next {
+                    PatternPositions::Variable(_) => {}
+                    PatternPositions::Constant(positions) => {
+                        look_ahead = Some(positions);
+                    }
+                }
+            }
+            let pattern_element = &self.rhs[i];
+
+            match pattern_element {
+                EquationContent::Variable(_) => {
+                    let mut positions = Vec::new();
+                    // lookbehind (i,j) - _j_ is possible start location
+                    // lookahead (i,j) - _i_ is possible end location
+                    for b in look_behinds {
+                        match b {
+                            LookBehind::Variables(_) => {
+                                todo!()
+                            }
+                            LookBehind::Constant(val_positions) => {
+                                for (_, j) in val_positions {
+                                    for &a in look_ahead.iter() {
+                                        for (i, _) in a {
+                                            positions.push((j, *i));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    pattern_positions[i] = PatternPositions::Variable(Some(positions))
+                }
+                EquationContent::Constant(_) => {}
+            }
+        }
+
+        let pattern_positions = pattern_positions.iter().map(|p| match p {
+            PatternPositions::Variable(var) => match var {
+                None => {
+                    panic!()
+                }
+                Some(var_positions) => var_positions
+                    .iter()
+                    .filter(|(i, j)| i <= j)
+                    .map(|(i, j)| lhs_chars.substring(*i, *j))
+                    .collect_vec(),
+            },
+            PatternPositions::Constant(vals) => vals
+                .iter()
+                .map(|(i, j)| lhs_chars.substring(*i, *j))
+                .collect_vec(),
+        });
+
+        let position_combinations = pattern_positions.multi_cartesian_product();
+        let mut substitutions = Vec::with_capacity(position_combinations.try_len().unwrap());
+        for combination in position_combinations {
+            let mut sub = Substitution::new();
+            // TODO?
+            sub.insert(UNIVERSE_CONSTANT, "");
+            sub.insert(self.lhs_variable, lhs_value);
+            for (i, pattern_element) in self.rhs.iter().enumerate() {
+                let assignment = combination[i];
+                match pattern_element {
+                    EquationContent::Variable(var) => {
+                        sub.insert(*var, assignment);
+                    }
+                    EquationContent::Constant(val) => {
+                        assert_eq!(*val, assignment)
+                    }
+                }
+            }
+            if self.check_substitution(&sub, &[]) {
+                substitutions.push(sub);
+            }
+        }
+
+        substitutions
     }
 }
 
@@ -117,6 +321,21 @@ impl fmt::Display for AtomicWordEquation<'_> {
         }
         Ok(())
     }
+}
+
+#[test]
+fn test_new_method() {
+    let eq = AtomicWordEquation::new(
+        "x",
+        vec![
+            EquationContent::Variable("y"),
+            EquationContent::Constant("a"),
+            EquationContent::Variable("z"),
+            EquationContent::Constant("b"),
+            EquationContent::Variable("q"),
+        ],
+    );
+    eq.rhs_assignments("bbabab");
 }
 
 /// A formula φ∧ψ: the conjunction of two sub-formulas
@@ -153,6 +372,10 @@ impl Formula for ConjunctiveFormula<'_> {
         let lhs_holds = self.lhs.check_substitution(substitution, universe);
         let rhs_holds = self.rhs.check_substitution(substitution, universe);
         lhs_holds && rhs_holds
+    }
+
+    fn all_solutions(&'_ self, universe: &[&str]) {
+        todo!()
     }
 }
 
@@ -197,6 +420,10 @@ impl Formula for DisjunctiveFormula<'_> {
         let rhs_holds = self.rhs.check_substitution(substitution, universe);
         lhs_holds || rhs_holds
     }
+
+    fn all_solutions(&'_ self, universe: &[&str]) {
+        todo!()
+    }
 }
 
 impl fmt::Display for DisjunctiveFormula<'_> {
@@ -212,7 +439,7 @@ pub struct NegativeFormula<'a> {
 }
 
 impl NegativeFormula<'_> {
-    pub fn new<'a>(inner: Box<dyn Formula + 'a>) -> NegativeFormula {
+    pub fn new<'a>(inner: Box<dyn Formula + 'a>) -> NegativeFormula<'a> {
         NegativeFormula { inner }
     }
 }
@@ -225,6 +452,10 @@ impl Formula for NegativeFormula<'_> {
     /// Simply the negation of the [`Formula::check_substitution`] of the sub-formula
     fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
         !self.inner.check_substitution(substitution, universe)
+    }
+
+    fn all_solutions(&'_ self, universe: &[&str]) {
+        todo!()
     }
 }
 
@@ -279,6 +510,10 @@ impl Formula for ExistentialFormula<'_> {
             }
         }
         false
+    }
+
+    fn all_solutions(&'_ self, universe: &[&str]) {
+        todo!()
     }
 }
 
@@ -336,6 +571,10 @@ impl Formula for UniversalFormula<'_> {
             }
         }
         true
+    }
+
+    fn all_solutions(&'_ self, universe: &[&str]) {
+        todo!()
     }
 }
 

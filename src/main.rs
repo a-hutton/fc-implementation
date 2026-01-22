@@ -1,5 +1,6 @@
 mod formula;
 mod formula_parser;
+mod strutils;
 mod tests;
 
 use crate::formula::Formula;
@@ -53,10 +54,8 @@ struct Args {
 fn find_solutions<'a>(formula: &'a dyn Formula, word: &'a str) -> Vec<Substitution<'a>> {
     let free_vars = formula.free_vars();
     let universe = generate_factors(word);
-    let all_subs = all_possible_substitutions(free_vars, word, &universe);
-    all_subs
-        .filter(|sub| formula.check_substitution(sub, &universe))
-        .collect()
+    let solutions = formula.all_solutions(&universe);
+    todo!()
 }
 
 /// Prints to stdout a pretty-printed CSV formatted table of all substitutions
