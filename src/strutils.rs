@@ -1,4 +1,6 @@
+use crate::generate_factors;
 use itertools::Itertools;
+use std::time::Instant;
 
 pub struct CharOperator<'a> {
     string: &'a str,
@@ -65,6 +67,7 @@ impl<'a> CharOperator<'a> {
         }
     }
 
+    // TODO - can this lifetime be implied?
     pub fn substring(&self, start: usize, end: usize) -> &'a str {
         if start == end {
             return &self.string[start..end];
@@ -212,4 +215,34 @@ fn test_lcp_generate_factors() {
     runner("banana", 16);
     runner("abcdefg", 29);
     runner("ÄÄÄÄ", 5);
+}
+
+#[test]
+fn time_comparison() {
+    let cases = [
+        "abcdefg",
+        "Marley was dead to begin with; of that there is no doubt.",
+        "Emma Woodhouse, handsome, clever, and rich, with a comfortable home and
+happy disposition, seemed to unite some of the best blessings of
+existence; and had lived nearly twenty-one years in the world with very
+little to distress or vex her.",
+    ];
+    for case in cases {
+        let start = Instant::now();
+        generate_factors(case);
+        let sliding_time = start.elapsed();
+
+        let start = Instant::now();
+        let chars = CharOperator::new(case);
+        let pre_factors = Instant::now();
+        chars.generate_factors();
+        let lcp_factors_time = pre_factors.elapsed();
+        let lcp_time = start.elapsed();
+        println!(
+            "sliding time: {}us   | lcp total: {}us |   lcp factors: {}us",
+            sliding_time.as_micros(),
+            lcp_time.as_micros(),
+            lcp_factors_time.as_micros()
+        );
+    }
 }

@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use crate::formula_parser::parse_formula_str;
+use crate::strutils::CharOperator;
 use crate::{find_solutions, print_solutions};
 use std::time::Instant;
 
@@ -173,10 +174,11 @@ fn test_solutions() {
     for test in cases {
         println!("Finding solutions for '{}'", test.formula);
         let res = parse_formula_str(test.formula);
+        let universe_chars = CharOperator::new(test.universe);
         match res {
             None => assert!(test.should_fail),
             Some(formula) => {
-                let solutions = find_solutions(&*formula, test.universe);
+                let solutions = find_solutions(&*formula, test.universe, &universe_chars);
                 println!("Found {n} solutions", n = solutions.len());
                 print_solutions(&solutions, test.universe);
                 assert_eq!(solutions.len(), test.num_solutions);
@@ -257,10 +259,11 @@ fn tests_from_literature() {
     for test in cases {
         println!("Finding solutions for '{}'", test.formula);
         let res = parse_formula_str(test.formula);
+        let universe_chars = CharOperator::new(test.universe);
         match res {
             None => assert!(test.should_fail),
             Some(formula) => {
-                let solutions = find_solutions(&*formula, test.universe);
+                let solutions = find_solutions(&*formula, test.universe, &universe_chars);
                 println!("Found {n} solutions", n = solutions.len());
                 print_solutions(&solutions, test.universe);
                 assert_eq!(solutions.len(), test.num_solutions);
@@ -301,7 +304,8 @@ fn difficult_test() {
     let t1 = Instant::now();
     let form = parse_formula_str(r#"Z=X"ab"Y && Z=Y"ba"X"#).unwrap();
     let universe = "ababaabababaababa";
-    let solutions = find_solutions(&*form, universe);
+    let universe_chars = CharOperator::new(universe);
+    let solutions = find_solutions(&*form, universe, &universe_chars);
     print_solutions(&solutions, universe);
     println!("Time taken: {:.2}s", t1.elapsed().as_secs_f32());
 }
