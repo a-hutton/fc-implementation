@@ -1,6 +1,6 @@
-use crate::{generate_factors, strutils, Substitution};
+use crate::{generate_factors, print_solutions, strutils, Substitution};
 use itertools::Itertools;
-use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -43,7 +43,7 @@ fn substitute<'a>(
 pub trait Formula: fmt::Display + fmt::Debug {
     fn free_vars(&self) -> Vec<&str>;
     fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool;
-    fn all_solutions(&self, universe: &[&str]);
+    fn all_solutions<'b>(&'b self, universe: &'b [&'b str]) -> Vec<Substitution<'b>>;
 }
 
 /// An 'atomic' equation where the left hand side is a single variable, and the right hand side is
@@ -85,9 +85,10 @@ impl<'a> Formula for AtomicWordEquation<'a> {
     /// The simple atomic case, where the left and right -hand sides are replaced using
     /// [`substitute`] and compared with simple string comparison
     fn check_substitution(&self, substitution: &Substitution, _: &[&str]) -> bool {
-        if !substitution.contains_key(UNIVERSE_CONSTANT) {
-            panic!("Missing universe constant `$U` (𝔲) in substitution")
-        }
+        // TODO?
+        // if !substitution.contains_key(UNIVERSE_CONSTANT) {
+        //     panic!("Missing universe constant `$U` (𝔲) in substitution")
+        // }
 
         let lhs_vec = vec![EquationContent::Variable(self.lhs_variable)];
         let lhs_sub = substitute(&lhs_vec, substitution).join("");
@@ -96,46 +97,15 @@ impl<'a> Formula for AtomicWordEquation<'a> {
         lhs_sub == rhs_sub
     }
 
-    fn all_solutions(&self, universe: &[&str]) {
+    fn all_solutions<'b>(&'b self, universe: &'b [&'b str]) -> Vec<Substitution<'b>> {
         // TODO - special case for $U
-        let mut eq_var_indices = HashMap::new();
-        let mut eq_const_indices = Vec::new();
-        let mut eq_consts = Vec::new();
-
-        let mut rhs_vars = Vec::with_capacity(self.rhs.len());
-        for content in &self.rhs {
-            // if term is a free variable, add to vec if not already there
-            if let EquationContent::Variable(var) = content
-                && !rhs_vars.contains(var)
-                && *var != UNIVERSE_CONSTANT
-            {
-                rhs_vars.push(*var);
-            }
-        }
-
-        for (i, pattern_item) in self.rhs.iter().enumerate() {
-            match pattern_item {
-                EquationContent::Variable(name) => match eq_var_indices.get_mut(name) {
-                    None => {
-                        let mut vec = Vec::with_capacity(self.rhs.len());
-                        vec.push(i);
-                        eq_var_indices.insert(name, vec);
-                    }
-                    Some(vec) => vec.push(i),
-                },
-                EquationContent::Constant(value) => {
-                    eq_const_indices.push((value, i));
-                    eq_consts.push(*value);
-                }
-            }
-        }
         let mut substitutions = Vec::new();
         for &lhs_value in universe {
             // For each possible value for the lhs variable
             let subs_for_val = self.rhs_assignments(lhs_value);
             substitutions.extend(subs_for_val);
         }
-        println!("{:?}", substitutions);
+        substitutions
     }
 }
 
@@ -281,10 +251,17 @@ impl<'a> AtomicWordEquation<'a> {
 
         let position_combinations = pattern_positions.multi_cartesian_product();
         let mut substitutions = Vec::with_capacity(position_combinations.try_len().unwrap());
+        let mut combo_set = HashSet::new();
         for combination in position_combinations {
+            // This is naive duplicate filter
+            if combo_set.contains(&combination) {
+                continue;
+            }
+            combo_set.insert(combination.clone());
+
             let mut sub = Substitution::new();
             // TODO?
-            sub.insert(UNIVERSE_CONSTANT, "");
+            // sub.insert(UNIVERSE_CONSTANT, "");
             sub.insert(self.lhs_variable, lhs_value);
             for (i, pattern_element) in self.rhs.iter().enumerate() {
                 let assignment = combination[i];
@@ -335,7 +312,8 @@ fn test_new_method() {
             EquationContent::Variable("q"),
         ],
     );
-    eq.rhs_assignments("bbabab");
+    let sols = eq.rhs_assignments("bbabab");
+    print_solutions(&sols, "bbabab");
 }
 
 /// A formula φ∧ψ: the conjunction of two sub-formulas
@@ -374,8 +352,16 @@ impl Formula for ConjunctiveFormula<'_> {
         lhs_holds && rhs_holds
     }
 
-    fn all_solutions(&'_ self, universe: &[&str]) {
-        todo!()
+    fn all_solutions<'b>(&'b self, universe: &'b [&'b str]) -> Vec<Substitution<'b>> {
+        let mut lhs_solutions = self.lhs.all_solutions(universe);
+        let mut i = 0;
+        while i < lhs_solutions.len() {
+            if !self.rhs.check_substitution(&lhs_solutions[i], universe) {
+                lhs_solutions.swap_remove(i);
+            }
+            i += 1;
+        }
+        lhs_solutions
     }
 }
 
@@ -421,7 +407,7 @@ impl Formula for DisjunctiveFormula<'_> {
         lhs_holds || rhs_holds
     }
 
-    fn all_solutions(&'_ self, universe: &[&str]) {
+    fn all_solutions(&'_ self, universe: &[&str]) -> Vec<Substitution> {
         todo!()
     }
 }
@@ -454,7 +440,7 @@ impl Formula for NegativeFormula<'_> {
         !self.inner.check_substitution(substitution, universe)
     }
 
-    fn all_solutions(&'_ self, universe: &[&str]) {
+    fn all_solutions(&'_ self, universe: &[&str]) -> Vec<Substitution<'_>> {
         todo!()
     }
 }
@@ -512,7 +498,7 @@ impl Formula for ExistentialFormula<'_> {
         false
     }
 
-    fn all_solutions(&'_ self, universe: &[&str]) {
+    fn all_solutions(&'_ self, universe: &[&str]) -> Vec<Substitution> {
         todo!()
     }
 }
@@ -573,7 +559,7 @@ impl Formula for UniversalFormula<'_> {
         true
     }
 
-    fn all_solutions(&'_ self, universe: &[&str]) {
+    fn all_solutions(&'_ self, universe: &[&str]) -> Vec<Substitution> {
         todo!()
     }
 }
