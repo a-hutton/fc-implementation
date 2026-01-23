@@ -1,23 +1,25 @@
 use crate::generate_factors;
 use itertools::Itertools;
 use std::time::Instant;
+use unicode_normalization::UnicodeNormalization;
 
-pub struct CharOperator<'a> {
-    string: &'a str,
+pub struct CharOperator {
+    string: String,
     char_byte_indices: Vec<usize>,
     len: usize,
 }
 
-impl<'a> CharOperator<'a> {
-    pub fn new(string: &'a str) -> CharOperator<'a> {
+impl CharOperator {
+    pub fn new(string: &str) -> CharOperator {
         if string.is_empty() {
             return CharOperator {
-                string,
+                string: String::new(),
                 char_byte_indices: vec![],
                 len: 0,
             };
         };
 
+        let string = string.nfc().collect::<String>();
         let bytes = string.as_bytes();
         let mut sizes = Vec::with_capacity(string.len());
 
@@ -68,7 +70,7 @@ impl<'a> CharOperator<'a> {
     }
 
     // TODO - can this lifetime be implied?
-    pub fn substring(&self, start: usize, end: usize) -> &'a str {
+    pub fn substring(&self, start: usize, end: usize) -> &str {
         if start == end {
             return &self.string[start..end];
         }
@@ -111,6 +113,10 @@ impl<'a> CharOperator<'a> {
 
     pub fn len(&self) -> usize {
         self.len
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.string
     }
 
     fn suffix_array(&self) -> Vec<usize> {
