@@ -27,7 +27,8 @@ fn main() {
     } else {
         args.text.as_str()
     };
-    let solutions = find_solutions(&*parsed_formula, text);
+    let text_chars = strutils::CharOperator::new(text);
+    let solutions = find_solutions(&*parsed_formula, text, &text_chars);
     println!("Found {} solutions", solutions.len());
     if !args.quiet {
         print_solutions(&solutions, args.text.as_str());
@@ -51,9 +52,13 @@ struct Args {
 
 /// Find all the assignments to variables in a formula based on values in the universe of
 /// substrings of `word` that satisfy the given formula.
-fn find_solutions<'a>(formula: &'a dyn Formula, word: &'a str) -> Vec<Substitution<'a>> {
+fn find_solutions<'a>(
+    formula: &'a dyn Formula,
+    word: &'a str,
+    word_chars: &'a strutils::CharOperator,
+) -> Vec<Substitution<'a>> {
     let free_vars = formula.free_vars();
-    let universe = generate_factors(word);
+    let universe = word_chars.generate_factors();
     let all_subs = all_possible_substitutions(free_vars, word, &universe);
     all_subs
         .filter(|sub| formula.check_substitution(sub, &universe))
