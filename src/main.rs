@@ -4,6 +4,7 @@ mod strutils;
 mod tests;
 
 use crate::formula::Formula;
+use crate::strutils::CharOperator;
 use clap::Parser;
 use itertools::Itertools;
 use std::collections::HashMap;
@@ -40,8 +41,8 @@ fn main() {
                     println!("Failed to parse formula, exiting");
                 }
                 Some(parsed_formula) => {
-                    let text_chars = strutils::CharOperator::new(text);
-                    let solutions = find_solutions(&*parsed_formula, text.as_str(), text_chars);
+                    let text_chars = CharOperator::new(text.as_str());
+                    let solutions = find_solutions(&*parsed_formula, &text_chars);
                     println!("Found {} solutions", solutions.len());
                     if !args.quiet {
                         print_solutions(&solutions, text.as_str());
@@ -49,7 +50,7 @@ fn main() {
                 }
             }
         }
-
+    }
 }
 
 #[derive(clap::Parser)]
@@ -92,13 +93,9 @@ enum ProgramCommand {
 
 /// Find all the assignments to variables in a formula based on values in the universe of
 /// substrings of `word` that satisfy the given formula.
-fn find_solutions<'a>(
-    formula: &'a dyn Formula,
-    word: &'a str,
-    word_chars: &'a strutils::CharOperator,
-) -> Vec<Substitution<'a>> {
+fn find_solutions<'a>(formula: &'a dyn Formula, word: &'a CharOperator) -> Vec<Substitution<'a>> {
     let free_vars = formula.free_vars();
-    let universe = word_chars.generate_factors();
+    let universe = word.generate_factors();
     let all_subs = all_possible_substitutions(free_vars, word, &universe);
     all_subs
         .filter(|sub| formula.check_substitution(sub, &universe))
@@ -189,7 +186,7 @@ type Substitution<'a> = HashMap<&'a str, &'a str>;
 /// for _n_ variables
 fn all_possible_substitutions<'a>(
     var_names: Vec<&'a str>,
-    w: &'a str,
+    w: &'a CharOperator,
     universe: &Vec<&'a str>,
 ) -> impl Iterator<Item = Substitution<'a>> {
     let var_vals_iter = std::iter::repeat_n(universe, var_names.len());
@@ -200,7 +197,7 @@ fn all_possible_substitutions<'a>(
             for i in 0..sub_vals.len() {
                 sub.insert(var_names[i], sub_vals[i]);
             }
-            sub.insert(formula::UNIVERSE_CONSTANT, w);
+            sub.insert(formula::UNIVERSE_CONSTANT, w.as_str());
             Some(sub)
         } else {
             None
