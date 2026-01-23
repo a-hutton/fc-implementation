@@ -1,5 +1,6 @@
 mod formula;
 mod formula_parser;
+mod strutils;
 mod tests;
 
 use crate::formula::Formula;
