@@ -1,4 +1,4 @@
-use crate::{generate_factors, Substitution};
+use crate::Substitution;
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -263,10 +263,9 @@ impl Formula for ExistentialFormula<'_> {
         free
     }
 
-    /// Checks a [`Substitution`] by calling [`generate_factors`] on the universe constant given
-    /// in the substitution, and for each possible value to assign to the bound variable _x_, a
-    /// new substitution is checked on the inner [`Formula::check_substitution`], returning
-    /// `true` when the first valid substitution is found
+    /// Checks a [`Substitution`] by iterating over the given universe, and for each possible value
+    /// to assign to the bound variable _x_, a new substitution is checked on the inner
+    /// [`Formula::check_substitution`], returning `true` when the first valid substitution is found
     fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
         let mut altered_substitution = substitution.clone();
         for factor in universe {
@@ -318,15 +317,12 @@ impl Formula for UniversalFormula<'_> {
         free
     }
 
-    /// Checks a [`Substitution`] by calling [`generate_factors`] on the universe constant given
-    /// in the substitution, and for each possible value to assign to the bound variable _x_, a
-    /// new substitution is checked on the inner [`Formula::check_substitution`], returning
-    /// `true` if every new substitution holds
+    /// Checks a [`Substitution`] by iterating over the given universe, and for each possible value
+    /// to assign to the bound variable _x_, a new substitution is checked on the inner
+    /// [`Formula::check_substitution`], returning `true` if every new substitution holds
     fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
-        let universe_word = substitution[UNIVERSE_CONSTANT];
-        let all_factors = generate_factors(universe_word);
         let mut altered_substitution = substitution.clone();
-        for factor in all_factors {
+        for factor in universe {
             altered_substitution.insert(self.bound_var, factor);
             let holds = self
                 .inner
