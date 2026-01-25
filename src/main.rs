@@ -13,24 +13,41 @@ use unicode_segmentation::UnicodeSegmentation;
 fn main() {
     let args = Args::parse();
 
-    let parsed_formula = formula_parser::parse_formula_str(args.pattern.as_str());
-    if parsed_formula.is_none() {
-        println!("Failed to parse formula, exiting");
-        return;
-    }
-    let parsed_formula = parsed_formula.unwrap();
-
-    let content: String;
-    let text = if args.file {
-        content = fs::read_to_string(args.text.as_str()).unwrap();
-        content.as_str()
+    let text = if let Some(filename) = args.text_option.file {
+        let res = fs::read_to_string(filename.as_str());
+        if let Ok(file_content) = res {
+            file_content
+        } else {
+            panic!("File '{}' not found", filename);
+        }
     } else {
-        args.text.as_str()
+        args.text_option.text.unwrap()
     };
-    let solutions = find_solutions(&*parsed_formula, text);
-    println!("Found {} solutions", solutions.len());
-    if !args.quiet {
-        print_solutions(&solutions, args.text.as_str());
+
+    match args.command {
+        ProgramCommand::GenerateFactors => {
+            // Generate factors only
+            let factors = generate_factors(text.as_str());
+            for factor in factors {
+                println!("{}", factor);
+            }
+        }
+        ProgramCommand::AllSolutions => {
+            let formula_str = args.pattern.unwrap();
+            let parsed_formula = formula_parser::parse_formula_str(formula_str.as_str());
+            match parsed_formula {
+                None => {
+                    println!("Failed to parse formula, exiting");
+                }
+                Some(parsed_formula) => {
+                    let solutions = find_solutions(&*parsed_formula, text.as_str());
+                    println!("Found {} solutions", solutions.len());
+                    if !args.quiet {
+                        print_solutions(&solutions, text.as_str());
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -38,15 +55,38 @@ fn main() {
 #[command(version)]
 struct Args {
     /// The formula used to search the text
-    pattern: String,
-    /// The text universe the search is applied to
-    text: String,
-    /// Is the argument [`text`] a text filename
-    #[arg(short, long)]
-    file: bool,
+    // pattern not needed for factor generation
+    #[arg(short, long, required_if_eq("command", "all-solutions"))]
+    pattern: Option<String>,
+    #[command(flatten)]
+    /// Flatten means this option will be transparent to user
+    text_option: TextOption,
     /// When set to quiet, the full table of found solutions won't be printed, just its size
     #[arg(short, long)]
     quiet: bool,
+    /// Options for testing individual components of the program
+    #[arg(short, long, value_enum, default_value_t = ProgramCommand::AllSolutions)]
+    command: ProgramCommand,
+}
+
+#[derive(clap::Args, Clone, Debug)]
+#[group(required = true, multiple = false)]
+/// Uses clap to require at least one of these, but no more than one.
+struct TextOption {
+    /// The text universe the search is applied to. Mutually exclusive with --text
+    #[arg(short, long, required_unless_present = "file")]
+    text: Option<String>,
+    /// Filename containing the text universe to search. Mutually exclusive with --file
+    #[arg(short, long, required_unless_present = "text")]
+    file: Option<String>,
+}
+
+#[derive(Clone, Debug, clap::ValueEnum)]
+enum ProgramCommand {
+    /// Find all solutions for the formula on the text
+    AllSolutions,
+    /// Print all factors of the text
+    GenerateFactors,
 }
 
 /// Find all the assignments to variables in a formula based on values in the universe of
