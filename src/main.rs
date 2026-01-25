@@ -25,10 +25,12 @@ fn main() {
         args.text_option.text.unwrap()
     };
 
+    let text_chars = CharOperator::new(text.as_str());
+
     match args.command {
         ProgramCommand::GenerateFactors => {
             // Generate factors only
-            let factors = generate_factors(text.as_str());
+            let factors = text_chars.generate_factors();
             for factor in factors {
                 println!("{}", factor);
             }
@@ -41,7 +43,6 @@ fn main() {
                     println!("Failed to parse formula, exiting");
                 }
                 Some(parsed_formula) => {
-                    let text_chars = CharOperator::new(text.as_str());
                     let solutions = find_solutions(&*parsed_formula, &text_chars);
                     println!("Found {} solutions", solutions.len());
                     if !args.quiet {
