@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use unicode_normalization::UnicodeNormalization;
 
 pub struct CharOperator {
     string: String,
@@ -16,7 +17,7 @@ impl CharOperator {
             };
         };
 
-        // let string = string.nfc().collect::<String>();
+        let string = string.nfc().collect::<String>();
         let bytes = string.as_bytes();
         let mut sizes = Vec::with_capacity(string.len());
 
@@ -60,7 +61,7 @@ impl CharOperator {
         sizes.push(string.len());
 
         CharOperator {
-            string: String::from(string),
+            string,
             char_byte_indices: sizes,
             len: char_count,
         }
