@@ -1,8 +1,10 @@
 mod formula;
 mod formula_parser;
+mod strutils;
 mod tests;
 
 use crate::formula::{EquationContent, Formula, VariableRelation, UNIVERSE_CONSTANT};
+use crate::formula::{Formula, UNIVERSE_CONSTANT};
 use clap::Parser;
 use itertools::Itertools;
 use std::fs;
@@ -11,25 +13,99 @@ use unicode_segmentation::UnicodeSegmentation;
 fn main() {
     let args = Args::parse();
 
-    let parsed_formula = formula_parser::parse_formula_str(args.pattern.as_str());
-    if parsed_formula.is_none() {
-        println!("Failed to parse formula, exiting");
-        return;
-    }
-    let parsed_formula = parsed_formula.unwrap();
-
-    let content: String;
-    let text = if args.file {
-        content = fs::read_to_string(args.text.as_str()).unwrap();
-        content.as_str()
+    let text = if let Some(filename) = args.text_option.file {
+        let res = fs::read_to_string(filename.as_str());
+        if let Ok(file_content) = res {
+            file_content
+        } else {
+            panic!("File '{}' not found", filename);
+        }
     } else {
-        args.text.as_str()
+        args.text_option.text.unwrap()
     };
-    let universe = generate_factors(text);
-    let solutions = find_solutions(&*parsed_formula, text, &universe);
-    println!("Found {} solutions", solutions.len());
-    if !args.quiet {
-        print_solutions(&solutions, args.text.as_str());
+
+    match args.command {
+        ProgramCommand::GenerateFactors => {
+            // Generate factors only
+            let factors = generate_factors(text.as_str());
+            if args.quiet {
+                println!("Generated {} Factors", factors.len());
+            } else {
+                for factor in factors {
+                    println!("{}", factor);
+                }
+            }
+        }
+        ProgramCommand::FindSolutions => {
+            let formula_str = args.pattern.unwrap();
+            let parsed_formula = formula_parser::parse_formula_str(formula_str.as_str());
+            match parsed_formula {
+                None => {
+                    println!("Failed to parse formula, exiting");
+                }
+                Some(parsed_formula) => {
+                    let solutions = find_solutions(&*parsed_formula, text.as_str());
+                    println!("Found {} solutions", solutions.len());
+                    if !args.quiet {
+                        print_solutions(&solutions, text.as_str());
+                    }
+                }
+            }
+        }
+        ProgramCommand::CheckAssignment => {
+            let mut substitution = Substitution::new();
+            let assignment_strings = &args.assignment.unwrap();
+            for var_assignment in assignment_strings {
+                // Split at first colon
+                if let Some((var_name, val)) = var_assignment.split_once(":") {
+                    substitution.insert(var_name, val);
+                } else {
+                    println!(
+                        "Invalid assignment string format: '{}'. Expected <VAR_NAME>:<VALUE>",
+                        var_assignment
+                    );
+                    return;
+                }
+            }
+
+            let formula_str = args.pattern.unwrap();
+            let parsed_formula = formula_parser::parse_formula_str(formula_str.as_str());
+            match parsed_formula {
+                None => {
+                    println!("Failed to parse formula, exiting");
+                }
+                Some(parsed_formula) => {
+                    let free_vars = parsed_formula.free_vars();
+                    for free_var in &free_vars {
+                        if !substitution.contains_key(free_var) {
+                            println!(
+                                "Free variable {} from formula is missing from assignment",
+                                free_var
+                            );
+                            return;
+                        }
+                    }
+                    for var_name in substitution.keys() {
+                        if !free_vars.contains(var_name) {
+                            println!("Unknown variable {} given assignment", var_name);
+                            return;
+                        }
+                    }
+                    let factors = generate_factors(text.as_str());
+
+                    // TODO - is this desired/necessary
+                    substitution.insert(UNIVERSE_CONSTANT, text.as_str());
+
+                    let is_satisfying = parsed_formula.check_substitution(&substitution, &factors);
+                    println!("Is Satisfying Assignment: {}", is_satisfying);
+                    if !args.quiet {
+                        for (var, val) in &substitution {
+                            println!("{}: \"{}\"", var, val)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -37,15 +113,48 @@ fn main() {
 #[command(version)]
 struct Args {
     /// The formula used to search the text
-    pattern: String,
-    /// The text universe the search is applied to
-    text: String,
-    /// Is the argument [`text`] a text filename
-    #[arg(short, long)]
-    file: bool,
+    // pattern not needed for factor generation
+    #[arg(
+        short,
+        long,
+        required_if_eq("command", "all-solutions"),
+        required_if_eq("command", "check-assignment")
+    )]
+    pattern: Option<String>,
+    #[command(flatten)]
+    /// Flatten means this option will be transparent to user
+    text_option: TextOption,
     /// When set to quiet, the full table of found solutions won't be printed, just its size
     #[arg(short, long)]
     quiet: bool,
+    /// Options for testing individual components of the program
+    #[arg(short, long, value_enum, default_value_t = ProgramCommand::FindSolutions)]
+    command: ProgramCommand,
+    /// An assignment to be verified (if command = check-assignment). Formatted as '<VAR_NAME>:<ASSIGNMENT_STRING>'
+    #[arg(short, long, required_if_eq("command", "check-assignment"))]
+    assignment: Option<Vec<String>>,
+}
+
+#[derive(clap::Args, Clone, Debug)]
+#[group(required = true, multiple = false)]
+/// Uses clap to require at least one of these, but no more than one.
+struct TextOption {
+    /// The text universe the search is applied to. Mutually exclusive with --text
+    #[arg(short, long, required_unless_present = "file")]
+    text: Option<String>,
+    /// Filename containing the text universe to search. Mutually exclusive with --file
+    #[arg(short, long, required_unless_present = "text")]
+    file: Option<String>,
+}
+
+#[derive(Clone, Debug, clap::ValueEnum)]
+enum ProgramCommand {
+    /// Find solutions for the formula on the text
+    FindSolutions,
+    /// Print all factors of the text
+    GenerateFactors,
+    /// Check a given assignment of variables to values holds
+    CheckAssignment,
 }
 
 /// Find all the assignments to variables in a formula based on values in the universe of
