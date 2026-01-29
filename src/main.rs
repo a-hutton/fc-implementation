@@ -4,7 +4,6 @@ mod strutils;
 mod tests;
 
 use crate::formula::{EquationContent, Formula, VariableRelation, UNIVERSE_CONSTANT};
-use crate::formula::{Formula, UNIVERSE_CONSTANT};
 use clap::Parser;
 use itertools::Itertools;
 use std::fs;
@@ -23,6 +22,8 @@ fn main() {
     } else {
         args.text_option.text.unwrap()
     };
+
+    let factors = generate_factors(text.as_str());
 
     match args.command {
         ProgramCommand::GenerateFactors => {
@@ -44,7 +45,7 @@ fn main() {
                     println!("Failed to parse formula, exiting");
                 }
                 Some(parsed_formula) => {
-                    let solutions = find_solutions(&*parsed_formula, text.as_str());
+                    let solutions = find_solutions(&*parsed_formula, text.as_str(), &factors);
                     println!("Found {} solutions", solutions.len());
                     if !args.quiet {
                         print_solutions(&solutions, text.as_str());
@@ -53,8 +54,8 @@ fn main() {
             }
         }
         ProgramCommand::CheckAssignment => {
-            let mut substitution = Substitution::new();
             let assignment_strings = &args.assignment.unwrap();
+            let mut substitution = Substitution::new(assignment_strings.len());
             for var_assignment in assignment_strings {
                 // Split at first colon
                 if let Some((var_name, val)) = var_assignment.split_once(":") {
@@ -77,7 +78,7 @@ fn main() {
                 Some(parsed_formula) => {
                     let free_vars = parsed_formula.free_vars();
                     for free_var in &free_vars {
-                        if !substitution.contains_key(free_var) {
+                        if !substitution.keys.contains(free_var) {
                             println!(
                                 "Free variable {} from formula is missing from assignment",
                                 free_var
@@ -85,7 +86,7 @@ fn main() {
                             return;
                         }
                     }
-                    for var_name in substitution.keys() {
+                    for var_name in &substitution.keys {
                         if !free_vars.contains(var_name) {
                             println!("Unknown variable {} given assignment", var_name);
                             return;
@@ -93,14 +94,11 @@ fn main() {
                     }
                     let factors = generate_factors(text.as_str());
 
-                    // TODO - is this desired/necessary
-                    substitution.insert(UNIVERSE_CONSTANT, text.as_str());
-
                     let is_satisfying = parsed_formula.check_substitution(&substitution, &factors);
                     println!("Is Satisfying Assignment: {}", is_satisfying);
                     if !args.quiet {
-                        for (var, val) in &substitution {
-                            println!("{}: \"{}\"", var, val)
+                        for i in 0..substitution.keys.len() {
+                            println!("{}: \"{}\"", substitution.keys[i], substitution.values[i]);
                         }
                     }
                 }
@@ -255,6 +253,14 @@ struct Substitution<'a> {
     universe_constant: &'a str,
 }
 impl<'a> Substitution<'a> {
+    fn new(size_hint: usize) -> Self {
+        Substitution {
+            keys: Vec::with_capacity(size_hint),
+            values: Vec::with_capacity(size_hint),
+            universe_constant: "",
+        }
+    }
+
     fn from_vars(vars: Vec<&'a str>, w: &'a str) -> Self {
         let len = vars.len();
         Substitution {
@@ -262,6 +268,11 @@ impl<'a> Substitution<'a> {
             values: Vec::with_capacity(len),
             universe_constant: w,
         }
+    }
+
+    fn insert(&mut self, key: &'a str, value: &'a str) {
+        self.keys.push(key);
+        self.values.push(value);
     }
 
     fn value(&self, var: &str) -> &str {
