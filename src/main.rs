@@ -3,7 +3,7 @@ mod formula_parser;
 mod strutils;
 mod tests;
 
-use crate::formula::Formula;
+use crate::formula::{Formula, UNIVERSE_CONSTANT};
 use clap::Parser;
 use itertools::Itertools;
 use std::collections::HashMap;
@@ -28,11 +28,15 @@ fn main() {
         ProgramCommand::GenerateFactors => {
             // Generate factors only
             let factors = generate_factors(text.as_str());
-            for factor in factors {
-                println!("{}", factor);
+            if args.quiet {
+                println!("Generated {} Factors", factors.len());
+            } else {
+                for factor in factors {
+                    println!("{}", factor);
+                }
             }
         }
-        ProgramCommand::AllSolutions => {
+        ProgramCommand::FindSolutions => {
             let formula_str = args.pattern.unwrap();
             let parsed_formula = formula_parser::parse_formula_str(formula_str.as_str());
             match parsed_formula {
@@ -48,6 +52,60 @@ fn main() {
                 }
             }
         }
+        ProgramCommand::CheckAssignment => {
+            let mut substitution = Substitution::new();
+            let assignment_strings = &args.assignment.unwrap();
+            for var_assignment in assignment_strings {
+                // Split at first colon
+                if let Some((var_name, val)) = var_assignment.split_once(":") {
+                    substitution.insert(var_name, val);
+                } else {
+                    println!(
+                        "Invalid assignment string format: '{}'. Expected <VAR_NAME>:<VALUE>",
+                        var_assignment
+                    );
+                    return;
+                }
+            }
+
+            let formula_str = args.pattern.unwrap();
+            let parsed_formula = formula_parser::parse_formula_str(formula_str.as_str());
+            match parsed_formula {
+                None => {
+                    println!("Failed to parse formula, exiting");
+                }
+                Some(parsed_formula) => {
+                    let free_vars = parsed_formula.free_vars();
+                    for free_var in &free_vars {
+                        if !substitution.contains_key(free_var) {
+                            println!(
+                                "Free variable {} from formula is missing from assignment",
+                                free_var
+                            );
+                            return;
+                        }
+                    }
+                    for var_name in substitution.keys() {
+                        if !free_vars.contains(var_name) {
+                            println!("Unknown variable {} given assignment", var_name);
+                            return;
+                        }
+                    }
+                    let factors = generate_factors(text.as_str());
+
+                    // TODO - is this desired/necessary
+                    substitution.insert(UNIVERSE_CONSTANT, text.as_str());
+
+                    let is_satisfying = parsed_formula.check_substitution(&substitution, &factors);
+                    println!("Is Satisfying Assignment: {}", is_satisfying);
+                    if !args.quiet {
+                        for (var, val) in &substitution {
+                            println!("{}: \"{}\"", var, val)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -56,7 +114,12 @@ fn main() {
 struct Args {
     /// The formula used to search the text
     // pattern not needed for factor generation
-    #[arg(short, long, required_if_eq("command", "all-solutions"))]
+    #[arg(
+        short,
+        long,
+        required_if_eq("command", "all-solutions"),
+        required_if_eq("command", "check-assignment")
+    )]
     pattern: Option<String>,
     #[command(flatten)]
     /// Flatten means this option will be transparent to user
@@ -65,8 +128,11 @@ struct Args {
     #[arg(short, long)]
     quiet: bool,
     /// Options for testing individual components of the program
-    #[arg(short, long, value_enum, default_value_t = ProgramCommand::AllSolutions)]
+    #[arg(short, long, value_enum, default_value_t = ProgramCommand::FindSolutions)]
     command: ProgramCommand,
+    /// An assignment to be verified (if command = check-assignment). Formatted as '<VAR_NAME>:<ASSIGNMENT_STRING>'
+    #[arg(short, long, required_if_eq("command", "check-assignment"))]
+    assignment: Option<Vec<String>>,
 }
 
 #[derive(clap::Args, Clone, Debug)]
@@ -83,10 +149,12 @@ struct TextOption {
 
 #[derive(Clone, Debug, clap::ValueEnum)]
 enum ProgramCommand {
-    /// Find all solutions for the formula on the text
-    AllSolutions,
+    /// Find solutions for the formula on the text
+    FindSolutions,
     /// Print all factors of the text
     GenerateFactors,
+    /// Check a given assignment of variables to values holds
+    CheckAssignment,
 }
 
 /// Find all the assignments to variables in a formula based on values in the universe of
