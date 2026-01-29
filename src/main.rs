@@ -3,8 +3,8 @@ mod formula_parser;
 mod strutils;
 mod tests;
 
-use crate::strutils::CharOperator;
 use crate::formula::{Formula, UNIVERSE_CONSTANT};
+use crate::strutils::CharOperator;
 use clap::Parser;
 use itertools::Itertools;
 use std::collections::HashMap;
@@ -94,7 +94,7 @@ fn main() {
                             return;
                         }
                     }
-                    let factors = generate_factors(text.as_str());
+                    let factors = text_chars.generate_factors();
 
                     // TODO - is this desired/necessary
                     substitution.insert(UNIVERSE_CONSTANT, text.as_str());
