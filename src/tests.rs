@@ -1,7 +1,8 @@
 #![cfg(test)]
 
 use crate::formula_parser::parse_formula_str;
-use crate::{find_solutions, generate_factors, print_solutions};
+use crate::{find_solutions, print_solutions};
+use crate::strutils::CharOperator;
 use std::time::Instant;
 
 #[derive(Copy, Clone)]
@@ -173,11 +174,11 @@ fn test_solutions() {
     for test in cases {
         println!("Finding solutions for '{}'", test.formula);
         let res = parse_formula_str(test.formula);
+        let universe_chars = CharOperator::new(test.universe);
         match res {
             None => assert!(test.should_fail),
             Some(formula) => {
-                let factors = generate_factors(test.universe);
-                let solutions = find_solutions(&*formula, test.universe, &factors);
+                let solutions = find_solutions(&*formula, &universe_chars);
                 println!("Found {n} solutions", n = solutions.len());
                 print_solutions(&solutions, test.universe);
                 assert_eq!(solutions.len(), test.num_solutions);
@@ -258,11 +259,11 @@ fn tests_from_literature() {
     for test in cases {
         println!("Finding solutions for '{}'", test.formula);
         let res = parse_formula_str(test.formula);
+        let universe_chars = CharOperator::new(test.universe);
         match res {
             None => assert!(test.should_fail),
             Some(formula) => {
-                let factors = generate_factors(test.universe);
-                let solutions = find_solutions(&*formula, test.universe, &factors);
+                let solutions = find_solutions(&*formula, &universe_chars);
                 println!("Found {n} solutions", n = solutions.len());
                 print_solutions(&solutions, test.universe);
                 assert_eq!(solutions.len(), test.num_solutions);
@@ -302,24 +303,9 @@ fn test_free_vars() {
 fn difficult_test() {
     let t1 = Instant::now();
     let form = parse_formula_str(r#"Z=X"ab"Y && Z=Y"ba"X"#).unwrap();
-    let universe = "ababaabaabababaabaababa"; //ababaabababaababa
-    let factors = generate_factors(universe);
-    let solutions = find_solutions(&*form, universe, &factors);
+    let universe = "ababaabababaababa";
+    let universe_chars = CharOperator::new(universe);
+    let solutions = find_solutions(&*form, &universe_chars);
     print_solutions(&solutions, universe);
     println!("Time taken: {:.2}s", t1.elapsed().as_secs_f32());
-}
-
-#[test]
-fn test_heuristics() {
-    let parsed_formula = parse_formula_str(r#"Z=X"ab"Y && Z=Y"ba"X"#);
-    match parsed_formula {
-        None => {}
-        Some(form) => {
-            println!("{:#?}", form.constraints());
-            let universe = "aababab";
-            let factors = generate_factors(universe);
-            let solutions = find_solutions(&*form, universe, &factors);
-            print_solutions(&solutions, "aababab");
-        }
-    }
 }

@@ -390,10 +390,9 @@ impl Formula for ExistentialFormula<'_> {
         free
     }
 
-    /// Checks a [`Substitution`] by calling [`generate_factors`] on the universe constant given
-    /// in the substitution, and for each possible value to assign to the bound variable _x_, a
-    /// new substitution is checked on the inner [`Formula::check_substitution`], returning
-    /// `true` when the first valid substitution is found
+    /// Checks a [`Substitution`] by iterating over the given universe, and for each possible value
+    /// to assign to the bound variable _x_, a new substitution is checked on the inner
+    /// [`Formula::check_substitution`], returning `true` when the first valid substitution is found
     fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
         let mut altered_substitution =
             Substitution::from_vars(substitution.keys.clone(), substitution.universe_constant);
@@ -463,10 +462,9 @@ impl Formula for UniversalFormula<'_> {
         free
     }
 
-    /// Checks a [`Substitution`] by calling [`generate_factors`] on the universe constant given
-    /// in the substitution, and for each possible value to assign to the bound variable _x_, a
-    /// new substitution is checked on the inner [`Formula::check_substitution`], returning
-    /// `true` if every new substitution holds
+    /// Checks a [`Substitution`] by iterating over the given universe, and for each possible value
+    /// to assign to the bound variable _x_, a new substitution is checked on the inner
+    /// [`Formula::check_substitution`], returning `true` if every new substitution holds
     fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
         let mut altered_substitution =
             Substitution::from_vars(substitution.keys.clone(), substitution.universe_constant);

@@ -1,21 +1,23 @@
 use itertools::Itertools;
+use unicode_normalization::UnicodeNormalization;
 
-pub struct CharOperator<'a> {
-    string: &'a str,
+pub struct CharOperator {
+    string: String,
     char_byte_indices: Vec<usize>,
     len: usize,
 }
 
-impl<'a> CharOperator<'a> {
-    pub fn new(string: &'a str) -> CharOperator<'a> {
+impl CharOperator {
+    pub fn new(string: &str) -> CharOperator {
         if string.is_empty() {
             return CharOperator {
-                string,
+                string: String::new(),
                 char_byte_indices: vec![],
                 len: 0,
             };
         };
 
+        let string = string.nfc().collect::<String>();
         let bytes = string.as_bytes();
         let mut sizes = Vec::with_capacity(string.len());
 
@@ -65,7 +67,8 @@ impl<'a> CharOperator<'a> {
         }
     }
 
-    pub fn substring(&self, start: usize, end: usize) -> &'a str {
+    // TODO - can this lifetime be implied?
+    pub fn substring(&self, start: usize, end: usize) -> &str {
         if start == end {
             return &self.string[start..end];
         }
@@ -76,6 +79,13 @@ impl<'a> CharOperator<'a> {
             );
         }
         &self.string[self.char_byte_indices[start]..self.char_byte_indices[end]]
+    }
+
+    fn char_at(&self, idx: usize) -> &str {
+        if idx == self.len {
+            return &self.string[self.char_byte_indices[idx]..];
+        }
+        self.substring(idx, idx + 1)
     }
 
     pub fn find(&self, needle: &str) -> Vec<usize> {
@@ -102,6 +112,60 @@ impl<'a> CharOperator<'a> {
     pub fn len(&self) -> usize {
         self.len
     }
+
+    pub fn as_str(&self) -> &str {
+        &self.string
+    }
+
+    fn suffix_array(&self) -> Vec<usize> {
+        (0..self.len)
+            .sorted_by_key(|i| self.substring(*i, self.len))
+            .collect_vec()
+    }
+
+    fn lcp_array(&self, suffix_array: &[usize]) -> Vec<usize> {
+        let mut lcp_array = Vec::with_capacity(suffix_array.len());
+        lcp_array.push(0);
+        for i in 0..suffix_array.len() {
+            if i > 0 {
+                let lcp = self.longest_common_prefix(suffix_array[i - 1], suffix_array[i]);
+                lcp_array.push(lcp);
+            }
+        }
+        lcp_array
+    }
+
+    /// Returns the _length_ of the longest common prefix of self.string[start_1..] and self.string[start_2..]
+    fn longest_common_prefix(&self, start_1: usize, start_2: usize) -> usize {
+        let mut char_count = 0;
+        loop {
+            let char_1 = self.char_at(start_1 + char_count);
+            let char_2 = self.char_at(start_2 + char_count);
+            if char_1 != char_2 {
+                return char_count;
+            }
+            if char_count == self.len {
+                return start_1;
+            }
+            char_count += 1;
+        }
+    }
+
+    pub fn generate_factors(&self) -> Vec<&str> {
+        let suffix_array = self.suffix_array();
+        let lcp_array = self.lcp_array(&suffix_array);
+        // TODO - max capacity is 0.5 * n * (n+1) + 1
+        let mut factors = Vec::new();
+        for i in 0..suffix_array.len() {
+            let suffix_len = self.len - suffix_array[i];
+            // Skip the first lcp_array[i] prefixes, as these are duplicates
+            for j in lcp_array[i]..suffix_len {
+                factors.push(self.substring(suffix_array[i], suffix_array[i] + j + 1));
+            }
+        }
+        factors.push("");
+        factors
+    }
 }
 
 #[test]
@@ -114,4 +178,45 @@ fn test_chars_substring() {
     assert_eq!(CharOperator::new("abcdéf").substring(3, 5), "dé");
 
     assert_eq!(CharOperator::new("a🦩a").substring(1, 2), "🦩");
+}
+
+#[test]
+fn test_suffix_array() {
+    assert_eq!(
+        CharOperator::new("banana").suffix_array(),
+        vec![5, 3, 1, 0, 4, 2]
+    );
+    assert_eq!(
+        CharOperator::new("bañaña").suffix_array(),
+        vec![5, 3, 1, 0, 4, 2]
+    );
+}
+
+#[test]
+fn test_lcp() {
+    assert_eq!(CharOperator::new("banana").longest_common_prefix(2, 4), 2);
+    assert_eq!(CharOperator::new("abcabca").longest_common_prefix(0, 3), 4);
+    assert_eq!(CharOperator::new("abcabca").longest_common_prefix(0, 6), 1);
+}
+
+#[test]
+fn test_lcp_array() {
+    let banana = CharOperator::new("banana");
+    assert_eq!(
+        banana.lcp_array(&banana.suffix_array()),
+        vec![0, 1, 3, 0, 0, 2]
+    );
+}
+
+#[test]
+fn test_lcp_generate_factors() {
+    fn runner(word: &str, num_factors: usize) {
+        let word_chars = CharOperator::new(word);
+        let factors = word_chars.generate_factors();
+        println!("{:?} ({})", factors, factors.len());
+        assert_eq!(factors.len(), num_factors);
+    }
+    runner("banana", 16);
+    runner("abcdefg", 29);
+    runner("ÄÄÄÄ", 5);
 }
