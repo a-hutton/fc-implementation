@@ -162,7 +162,8 @@ enum ProgramCommand {
 fn find_solutions<'a>(formula: &'a dyn Formula, word: &'a CharOperator) -> Vec<Substitution<'a>> {
     let free_vars = formula.free_vars();
     let universe = word.generate_factors();
-    let all_subs = all_possible_substitutions(free_vars, word, &universe);
+    let constraints = formula.constraints();
+    let all_subs = all_possible_substitutions(free_vars, constraints, word, &universe);
     all_subs
         .filter(|sub| formula.check_substitution(sub, &universe))
         .collect()
@@ -283,7 +284,7 @@ impl<'a> Substitution<'a> {
 fn all_possible_substitutions<'a>(
     var_names: Vec<&'a str>,
     constraint: VariableRelation,
-    w: &'a str,
+    w: &'a CharOperator,
     universe: &Vec<&'a str>,
 ) -> impl Iterator<Item = Substitution<'a>> {
     let var_vals_iter = std::iter::repeat_n(universe, var_names.len());
@@ -291,7 +292,7 @@ fn all_possible_substitutions<'a>(
 
     std::iter::from_fn(move || {
         let mut constraints_satisfied = false;
-        let mut sub = Substitution::from_vars(var_names.clone(), w);
+        let mut sub = Substitution::from_vars(var_names.clone(), w.as_str());
         while !constraints_satisfied {
             let next = subs_iter.next();
             sub.values.clear();
@@ -299,7 +300,7 @@ fn all_possible_substitutions<'a>(
             for v in sub_vals {
                 sub.values.push(v);
             }
-            constraints_satisfied = constraint.check(&sub, w);
+            constraints_satisfied = constraint.check(&sub, w.as_str());
         }
         Some(sub)
     })
