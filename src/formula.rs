@@ -1,3 +1,4 @@
+use crate::strutils::CharOperator;
 use crate::Substitution;
 use itertools::Itertools;
 use std::fmt;
@@ -92,6 +93,60 @@ impl<'a> VariableRelation<'a> {
                 lhs,
             } => sub.value(lhs).starts_with(sub.value(prefix)),
             VariableRelation::ConstPrefix { lhs, prefix } => sub.value(lhs).starts_with(prefix),
+        }
+    }
+}
+
+pub enum Quantifier {
+    Universal,
+    Existential,
+}
+
+pub enum NewFormula<'a> {
+    Equation {
+        lhs: &'a str,
+        rhs: Vec<EquationContent<'a>>,
+    },
+    Negation {
+        inner: Box<NewFormula<'a>>,
+    },
+    Quantifier {
+        inner: Box<NewFormula<'a>>,
+        var: &'a str,
+        quantifier: Quantifier,
+    },
+    Disjunction {
+        fragments: Vec<NewFormula<'a>>,
+    },
+    Conjunction {
+        fragments: Vec<NewFormula<'a>>,
+    },
+}
+
+fn check_substitution(formula: NewFormula, w: CharOperator, substitution: Substitution) -> bool {
+    match formula {
+        NewFormula::Equation { lhs, rhs } => {
+            let lhs_value = substitution.value(lhs);
+            let rhs_value = substitution.apply(&rhs).join("");
+            lhs_value == rhs_value
+        }
+        NewFormula::Negation { inner } => !check_substitution(*inner, w, substitution),
+        NewFormula::Quantifier {
+            inner,
+            var,
+            quantifier,
+        } => {
+            match quantifier {
+                Quantifier::Universal => {}
+                Quantifier::Existential => {}
+            }
+            todo!()
+        }
+        NewFormula::Disjunction { .. } => {
+            todo!()
+        }
+        NewFormula::Conjunction { .. } => {
+            todo!()
         }
     }
 }
