@@ -1,6 +1,7 @@
 use crate::strutils::CharOperator;
 use crate::Substitution;
 use itertools::Itertools;
+use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -46,6 +47,8 @@ pub enum VariableRelation<'a> {
         lhs: &'a str,
         prefix: &'a str,
     },
+    /// The constraint that guarantees nothing: [`VariableRelation::check`] will always return `true`
+    NilConstraint,
 }
 
 impl<'a> VariableRelation<'a> {
@@ -93,15 +96,18 @@ impl<'a> VariableRelation<'a> {
                 lhs,
             } => sub.value(lhs).starts_with(sub.value(prefix)),
             VariableRelation::ConstPrefix { lhs, prefix } => sub.value(lhs).starts_with(prefix),
+            VariableRelation::NilConstraint => true,
         }
     }
 }
 
+#[derive(Debug)]
 pub enum Quantifier {
     Universal,
     Existential,
 }
 
+#[derive(Debug)]
 pub enum NewFormula<'a> {
     Equation {
         lhs: &'a str,
@@ -110,43 +116,214 @@ pub enum NewFormula<'a> {
     Negation {
         inner: Box<NewFormula<'a>>,
     },
+    Conjunction {
+        fragments: Vec<NewFormula<'a>>,
+    },
+    Disjunction {
+        fragments: Vec<NewFormula<'a>>,
+    },
     Quantifier {
         inner: Box<NewFormula<'a>>,
         var: &'a str,
         quantifier: Quantifier,
     },
-    Disjunction {
-        fragments: Vec<NewFormula<'a>>,
-    },
-    Conjunction {
-        fragments: Vec<NewFormula<'a>>,
-    },
 }
 
-fn check_substitution(formula: NewFormula, w: CharOperator, substitution: Substitution) -> bool {
-    match formula {
-        NewFormula::Equation { lhs, rhs } => {
-            let lhs_value = substitution.value(lhs);
-            let rhs_value = substitution.apply(&rhs).join("");
-            lhs_value == rhs_value
-        }
-        NewFormula::Negation { inner } => !check_substitution(*inner, w, substitution),
-        NewFormula::Quantifier {
-            inner,
-            var,
-            quantifier,
-        } => {
-            match quantifier {
-                Quantifier::Universal => {}
-                Quantifier::Existential => {}
+impl NewFormula<'_> {
+    fn check_substitution(&self, w: &CharOperator, substitution: &Substitution) -> bool {
+        match self {
+            NewFormula::Equation { lhs, rhs } => {
+                let lhs_value = substitution.value(lhs);
+                let rhs_value = substitution.apply(rhs).join("");
+                lhs_value == rhs_value
             }
-            todo!()
+            NewFormula::Negation { inner } => !inner.check_substitution(w, substitution),
+            NewFormula::Conjunction { fragments } => {
+                for fragment in fragments {
+                    if !fragment.check_substitution(w, substitution) {
+                        return false;
+                    }
+                }
+                true
+            }
+            NewFormula::Disjunction { fragments } => {
+                for fragment in fragments {
+                    if fragment.check_substitution(w, substitution) {
+                        return true;
+                    }
+                }
+                false
+            }
+            NewFormula::Quantifier {
+                inner,
+                var,
+                quantifier,
+            } => {
+                let mut altered_substitution = Substitution::from_vars(
+                    substitution.keys.clone(),
+                    substitution.universe_constant,
+                );
+                altered_substitution.keys.push(var);
+                for val in &substitution.values {
+                    altered_substitution.values.push(*val);
+                }
+                altered_substitution.values.push("");
+                let last_idx = altered_substitution.values.len() - 1;
+                match quantifier {
+                    Quantifier::Universal => {
+                        for factor in w.generate_factors() {
+                            altered_substitution.values[last_idx] = factor;
+                            let holds = inner.check_substitution(w, &altered_substitution);
+                            if holds {
+                                return false;
+                            }
+                        }
+                        true
+                    }
+                    Quantifier::Existential => {
+                        for factor in w.generate_factors() {
+                            altered_substitution.values[last_idx] = factor;
+                            let holds = inner.check_substitution(w, &altered_substitution);
+                            if holds {
+                                return true;
+                            }
+                        }
+                        false
+                    }
+                }
+            }
         }
-        NewFormula::Disjunction { .. } => {
-            todo!()
+    }
+
+    fn free_vars(&self) -> Vec<&str> {
+        match self {
+            NewFormula::Equation { lhs, rhs } => {
+                let mut free = vec![];
+                if *lhs != UNIVERSE_CONSTANT {
+                    free.push(*lhs);
+                }
+
+                for content in rhs {
+                    // if term is a free variable, add to vec if not already there
+                    if let EquationContent::Variable(var) = content
+                        && !free.contains(var)
+                        && *var != UNIVERSE_CONSTANT
+                    {
+                        free.push(*var);
+                    }
+                }
+                free
+            }
+            NewFormula::Negation { inner } => inner.free_vars(),
+            NewFormula::Conjunction { fragments } => {
+                let mut free = HashSet::new();
+                for fragment in fragments {
+                    for var in fragment.free_vars() {
+                        free.insert(var);
+                    }
+                }
+                free.into_iter().collect()
+            }
+            NewFormula::Disjunction { fragments } => {
+                let mut free = HashSet::new();
+                for fragment in fragments {
+                    for var in fragment.free_vars() {
+                        free.insert(var);
+                    }
+                }
+                free.into_iter().collect()
+            }
+            NewFormula::Quantifier {
+                var,
+                quantifier: _quantifier,
+                inner,
+            } => {
+                let mut free = inner.free_vars();
+                let quantified_var_idx = free.iter().position(|v| v == var).unwrap();
+                free.remove(quantified_var_idx);
+                free
+            }
         }
-        NewFormula::Conjunction { .. } => {
-            todo!()
+    }
+
+    fn constraints(&'_ self) -> VariableRelation<'_> {
+        match self {
+            NewFormula::Equation { lhs, rhs } => {
+                let rhs_variables: Vec<_> = rhs
+                    .iter()
+                    .filter(|item| matches!(item, EquationContent::Variable(_)))
+                    .map(|var| {
+                        if let EquationContent::Variable(v) = var {
+                            *v
+                        } else {
+                            unreachable!()
+                        }
+                    })
+                    .sorted()
+                    .collect();
+
+                // sum of the total lengths of all constants
+                let sum_constant_lens: usize = rhs
+                    .iter()
+                    .filter(|item| matches!(item, EquationContent::Constant(_)))
+                    .map(|var| {
+                        if let EquationContent::Constant(v) = var {
+                            (*v).len()
+                        } else {
+                            unreachable!()
+                        }
+                    })
+                    .sum();
+
+                let length_equality = VariableRelation::LengthEquality {
+                    lhs,
+                    rhs_vars: rhs_variables,
+                    c: sum_constant_lens,
+                };
+
+                match rhs[0] {
+                    EquationContent::Variable(var) => VariableRelation::Conjunction {
+                        constraints: vec![
+                            VariableRelation::VarPrefix {
+                                lhs,
+                                prefix_var: var,
+                            },
+                            length_equality,
+                        ],
+                    },
+                    EquationContent::Constant(constant) => VariableRelation::Conjunction {
+                        constraints: vec![
+                            VariableRelation::ConstPrefix {
+                                lhs,
+                                prefix: constant,
+                            },
+                            length_equality,
+                        ],
+                    },
+                }
+            }
+            NewFormula::Negation { inner } => VariableRelation::Negation {
+                inner: Box::new(inner.constraints()),
+            },
+            NewFormula::Conjunction { fragments } => {
+                let mut constraints = Vec::with_capacity(fragments.len());
+                for fragment in fragments {
+                    constraints.push(fragment.constraints());
+                }
+                VariableRelation::Conjunction { constraints }
+            }
+            NewFormula::Disjunction { fragments } => {
+                let mut constraints = Vec::with_capacity(fragments.len());
+                for fragment in fragments {
+                    constraints.push(fragment.constraints());
+                }
+                VariableRelation::Disjunction { constraints }
+            }
+            NewFormula::Quantifier { .. } => {
+                //TODO: return a constraint that is the inner formula's constraint(s) with any references
+                // to quantified variables removed
+                VariableRelation::NilConstraint
+            }
         }
     }
 }
