@@ -1,4 +1,4 @@
-use crate::formula::{EquationContent, Formula, NewFormula, Quantifier};
+use crate::formula::{EquationContent, Formula, Quantifier};
 use pest::iterators::{Pair, Pairs};
 use pest::Parser;
 
@@ -27,7 +27,7 @@ fn test_parser() {
 }
 
 /// Creates a [`Formula`] object-based structural representation of the given formula string
-pub fn parse_formula_str(eq: &str) -> Option<NewFormula> {
+pub fn parse_formula_str(eq: &'_ str) -> Option<Formula<'_>> {
     let res = FormulaParser::parse(Rule::formula, eq);
     if let Ok(mut formula) = res {
         let formula = formula.next().unwrap();
@@ -66,8 +66,8 @@ fn test_formula_parse() {
     }
 }
 
-/// Parses a [`Pairs<Rule>`] sequence into a [`NewFormula::Equation`]
-fn parse_equation<'a>(eq: &mut Pairs<'a, Rule>) -> NewFormula<'a> {
+/// Parses a [`Pairs<Rule>`] sequence into a [`Formula::Equation`]
+fn parse_equation<'a>(eq: &mut Pairs<'a, Rule>) -> Formula<'a> {
     let lhs = eq.next().unwrap().as_str();
     let rhs = eq
         .map(|x| match x.as_rule() {
@@ -81,20 +81,20 @@ fn parse_equation<'a>(eq: &mut Pairs<'a, Rule>) -> NewFormula<'a> {
         })
         .collect();
 
-    NewFormula::Equation { lhs, rhs }
+    Formula::Equation { lhs, rhs }
 }
 
-/// Parses a [`Pairs<Rule>`] sequence into a [`NewFormula::Negation`]
-fn parse_negation<'a>(eq: &mut Pairs<'a, Rule>) -> NewFormula<'a> {
+/// Parses a [`Pairs<Rule>`] sequence into a [`Formula::Negation`]
+fn parse_negation<'a>(eq: &mut Pairs<'a, Rule>) -> Formula<'a> {
     let inner_pair = eq.next().unwrap();
     let inner_formula = parse_formula_pair(inner_pair);
-    NewFormula::Negation {
+    Formula::Negation {
         inner: Box::new(inner_formula),
     }
 }
 
-/// Parses a [`Pairs<Rule>`] sequence into a [`NewFormula::Conjunction`]
-fn parse_conjunction<'a>(eq: &mut Pairs<'a, Rule>) -> NewFormula<'a> {
+/// Parses a [`Pairs<Rule>`] sequence into a [`Formula::Conjunction`]
+fn parse_conjunction<'a>(eq: &mut Pairs<'a, Rule>) -> Formula<'a> {
     let mut fragments = Vec::new();
     loop {
         let fragment = eq.next();
@@ -104,11 +104,11 @@ fn parse_conjunction<'a>(eq: &mut Pairs<'a, Rule>) -> NewFormula<'a> {
             break;
         }
     }
-    NewFormula::Conjunction { fragments }
+    Formula::Conjunction { fragments }
 }
 
-/// Parses a [`Pairs<Rule>`] sequence into a [`NewFormula::Disjunction`]
-fn parse_disjunction<'a>(eq: &mut Pairs<'a, Rule>) -> NewFormula<'a> {
+/// Parses a [`Pairs<Rule>`] sequence into a [`Formula::Disjunction`]
+fn parse_disjunction<'a>(eq: &mut Pairs<'a, Rule>) -> Formula<'a> {
     let mut fragments = Vec::new();
     loop {
         let fragment = eq.next();
@@ -118,11 +118,11 @@ fn parse_disjunction<'a>(eq: &mut Pairs<'a, Rule>) -> NewFormula<'a> {
             break;
         }
     }
-    NewFormula::Disjunction { fragments }
+    Formula::Disjunction { fragments }
 }
 
-/// Parses a [`Pairs<Rule>`] sequence into a [`NewFormula::Quantifier`]
-fn parse_quantifier<'a>(eq: &mut Pairs<'a, Rule>, quantifier: Quantifier) -> NewFormula<'a> {
+/// Parses a [`Pairs<Rule>`] sequence into a [`Formula::Quantifier`]
+fn parse_quantifier<'a>(eq: &mut Pairs<'a, Rule>, quantifier: Quantifier) -> Formula<'a> {
     let variable_pair = eq.next().unwrap();
     if variable_pair.as_rule() != Rule::variable {
         panic!("Expected a variable to be bound in 'exists' clause")
@@ -133,7 +133,7 @@ fn parse_quantifier<'a>(eq: &mut Pairs<'a, Rule>, quantifier: Quantifier) -> New
     let inner = eq.next().unwrap();
     let inner_formula = parse_formula_pair(inner);
 
-    NewFormula::Quantifier {
+    Formula::Quantifier {
         inner: Box::new(inner_formula),
         var: bound_variable,
         quantifier,
@@ -142,7 +142,7 @@ fn parse_quantifier<'a>(eq: &mut Pairs<'a, Rule>, quantifier: Quantifier) -> New
 
 /// Parse a pest `Pair` into a [`Formula`] `Box` pointer with the appropriate
 /// implementation of [`Formula`] by calling the corresponding function on the [`Pair<Rule>`]
-fn parse_formula_pair(pair: Pair<Rule>) -> NewFormula {
+fn parse_formula_pair(pair: Pair<Rule>) -> Formula {
     match pair.as_rule() {
         Rule::negation => parse_negation(&mut pair.into_inner()),
         Rule::simple_equation => parse_equation(&mut pair.into_inner()),

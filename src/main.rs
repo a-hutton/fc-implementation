@@ -3,7 +3,7 @@ mod formula_parser;
 mod strutils;
 mod tests;
 
-use crate::formula::{EquationContent, Formula, NewFormula, VariableRelation, UNIVERSE_CONSTANT};
+use crate::formula::{EquationContent, Formula, VariableRelation, UNIVERSE_CONSTANT};
 use crate::strutils::CharOperator;
 use clap::Parser;
 use itertools::Itertools;
@@ -158,13 +158,13 @@ enum ProgramCommand {
 
 /// Find all the assignments to variables in a formula based on values in the universe of
 /// substrings of `word` that satisfy the given formula.
-fn find_solutions<'a>(formula: &'a NewFormula, word: &'a CharOperator) -> Vec<Substitution<'a>> {
+fn find_solutions<'a>(formula: &'a Formula, word: &'a CharOperator) -> Vec<Substitution<'a>> {
     let free_vars = formula.free_vars();
     let universe = word.generate_factors();
     let constraints = formula.constraints();
     let all_subs = all_possible_substitutions(free_vars, constraints, word, &universe);
     all_subs
-        .filter(|sub| formula.check_substitution(word, &sub))
+        .filter(|sub| formula.check_substitution(word, sub))
         .collect()
 }
 
