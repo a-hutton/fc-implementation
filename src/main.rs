@@ -3,7 +3,7 @@ mod formula_parser;
 mod strutils;
 mod tests;
 
-use crate::formula::{EquationContent, Formula, VariableRelation, UNIVERSE_CONSTANT};
+use crate::formula::{EquationContent, Formula, NewFormula, VariableRelation, UNIVERSE_CONSTANT};
 use crate::strutils::CharOperator;
 use clap::Parser;
 use itertools::Itertools;
@@ -46,7 +46,7 @@ fn main() {
                     println!("Failed to parse formula, exiting");
                 }
                 Some(parsed_formula) => {
-                    let solutions = find_solutions(&*parsed_formula, &text_chars);
+                    let solutions = find_solutions(&parsed_formula, &text_chars);
                     println!("Found {} solutions", solutions.len());
                     if !args.quiet {
                         print_solutions(&solutions, text.as_str());
@@ -93,9 +93,9 @@ fn main() {
                             return;
                         }
                     }
-                    let factors = text_chars.generate_factors();
 
-                    let is_satisfying = parsed_formula.check_substitution(&substitution, &factors);
+                    let is_satisfying =
+                        parsed_formula.check_substitution(&text_chars, &substitution);
                     println!("Is Satisfying Assignment: {}", is_satisfying);
                     if !args.quiet {
                         for i in 0..substitution.keys.len() {
@@ -158,14 +158,13 @@ enum ProgramCommand {
 
 /// Find all the assignments to variables in a formula based on values in the universe of
 /// substrings of `word` that satisfy the given formula.
-
-fn find_solutions<'a>(formula: &'a dyn Formula, word: &'a CharOperator) -> Vec<Substitution<'a>> {
+fn find_solutions<'a>(formula: &'a NewFormula, word: &'a CharOperator) -> Vec<Substitution<'a>> {
     let free_vars = formula.free_vars();
     let universe = word.generate_factors();
     let constraints = formula.constraints();
     let all_subs = all_possible_substitutions(free_vars, constraints, word, &universe);
     all_subs
-        .filter(|sub| formula.check_substitution(sub, &universe))
+        .filter(|sub| formula.check_substitution(word, &sub))
         .collect()
 }
 

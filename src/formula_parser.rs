@@ -1,7 +1,4 @@
-use crate::formula::{
-    AtomicWordEquation, ConjunctiveFormula, DisjunctiveFormula, EquationContent,
-    ExistentialFormula, Formula, NegativeFormula, UniversalFormula,
-};
+use crate::formula::{EquationContent, Formula, NewFormula, Quantifier};
 use pest::iterators::{Pair, Pairs};
 use pest::Parser;
 
@@ -30,7 +27,7 @@ fn test_parser() {
 }
 
 /// Creates a [`Formula`] object-based structural representation of the given formula string
-pub fn parse_formula_str(eq: &str) -> Option<Box<dyn Formula + '_>> {
+pub fn parse_formula_str(eq: &str) -> Option<NewFormula> {
     let res = FormulaParser::parse(Rule::formula, eq);
     if let Ok(mut formula) = res {
         let formula = formula.next().unwrap();
@@ -63,15 +60,15 @@ fn test_formula_parse() {
                 panic!("Parse error on formula\n{:?}", eq)
             }
             Some(val) => {
-                println!("Success {}\n---------------", val);
+                println!("Success {:?}\n---------------", val);
             }
         }
     }
 }
 
-/// Parses a [`Pairs<Rule>`] sequence into an instance of [`AtomicWordEquation`]
-fn parse_atomic_equation<'a>(eq: &mut Pairs<'a, Rule>) -> AtomicWordEquation<'a> {
-    let lhs_var = eq.next().unwrap().as_str();
+/// Parses a [`Pairs<Rule>`] sequence into a [`NewFormula::Equation`]
+fn parse_equation<'a>(eq: &mut Pairs<'a, Rule>) -> NewFormula<'a> {
+    let lhs = eq.next().unwrap().as_str();
     let rhs = eq
         .map(|x| match x.as_rule() {
             Rule::constant => {
@@ -84,44 +81,48 @@ fn parse_atomic_equation<'a>(eq: &mut Pairs<'a, Rule>) -> AtomicWordEquation<'a>
         })
         .collect();
 
-    AtomicWordEquation::new(lhs_var, rhs)
+    NewFormula::Equation { lhs, rhs }
 }
 
-/// Parses a [`Pairs<Rule>`] sequence into an instance of [`NegativeFormula`]
-fn parse_negation<'a>(eq: &mut Pairs<'a, Rule>) -> NegativeFormula<'a> {
-    let inner = eq.next().unwrap();
-    let atomic_eq = parse_formula_pair(inner);
-    NegativeFormula::new(atomic_eq)
+/// Parses a [`Pairs<Rule>`] sequence into a [`NewFormula::Negation`]
+fn parse_negation<'a>(eq: &mut Pairs<'a, Rule>) -> NewFormula<'a> {
+    let inner_pair = eq.next().unwrap();
+    let inner_formula = parse_formula_pair(inner_pair);
+    NewFormula::Negation {
+        inner: Box::new(inner_formula),
+    }
 }
 
-/// Parses a [`Pairs<Rule>`] sequence into an instance of [`ConjunctiveFormula`]
-fn parse_conjunction<'a>(eq: &mut Pairs<'a, Rule>) -> ConjunctiveFormula<'a> {
-    // for lhs and rhs, get the inner type within the formula rule
-    let lhs_eq = eq.next().unwrap();
-
-    let rhs_eq = eq.next().unwrap();
-
-    let lhs = parse_formula_pair(lhs_eq);
-    let rhs = parse_formula_pair(rhs_eq);
-
-    ConjunctiveFormula::new(lhs, rhs)
+/// Parses a [`Pairs<Rule>`] sequence into a [`NewFormula::Conjunction`]
+fn parse_conjunction<'a>(eq: &mut Pairs<'a, Rule>) -> NewFormula<'a> {
+    let mut fragments = Vec::new();
+    loop {
+        let fragment = eq.next();
+        if let Some(fragment) = fragment {
+            fragments.push(parse_formula_pair(fragment));
+        } else {
+            break;
+        }
+    }
+    NewFormula::Conjunction { fragments }
 }
 
-/// Parses a [`Pairs<Rule>`] sequence into an instance of [`DisjunctiveFormula`]
-fn parse_disjunction<'a>(eq: &mut Pairs<'a, Rule>) -> DisjunctiveFormula<'a> {
-    // for lhs and rhs, get the inner type within the formula rule
-    let lhs_eq = eq.next().unwrap();
-
-    let rhs_eq = eq.next().unwrap();
-
-    let lhs = parse_formula_pair(lhs_eq);
-    let rhs = parse_formula_pair(rhs_eq);
-
-    DisjunctiveFormula::new(lhs, rhs)
+/// Parses a [`Pairs<Rule>`] sequence into a [`NewFormula::Disjunction`]
+fn parse_disjunction<'a>(eq: &mut Pairs<'a, Rule>) -> NewFormula<'a> {
+    let mut fragments = Vec::new();
+    loop {
+        let fragment = eq.next();
+        if let Some(fragment) = fragment {
+            fragments.push(parse_formula_pair(fragment));
+        } else {
+            break;
+        }
+    }
+    NewFormula::Disjunction { fragments }
 }
 
-/// Parses a [`Pairs<Rule>`] sequence into an instance of [`ExistentialFormula`]
-fn parse_existential<'a>(eq: &mut Pairs<'a, Rule>) -> ExistentialFormula<'a> {
+/// Parses a [`Pairs<Rule>`] sequence into a [`NewFormula::Quantifier`]
+fn parse_quantifier<'a>(eq: &mut Pairs<'a, Rule>, quantifier: Quantifier) -> NewFormula<'a> {
     let variable_pair = eq.next().unwrap();
     if variable_pair.as_rule() != Rule::variable {
         panic!("Expected a variable to be bound in 'exists' clause")
@@ -132,34 +133,23 @@ fn parse_existential<'a>(eq: &mut Pairs<'a, Rule>) -> ExistentialFormula<'a> {
     let inner = eq.next().unwrap();
     let inner_formula = parse_formula_pair(inner);
 
-    ExistentialFormula::new(bound_variable, inner_formula)
-}
-
-/// Parses a [`Pairs<Rule>`] sequence into an instance of [`UniversalFormula`]
-fn parse_universal<'a>(eq: &mut Pairs<'a, Rule>) -> UniversalFormula<'a> {
-    let variable_pair = eq.next().unwrap();
-    if variable_pair.as_rule() != Rule::variable {
-        panic!("Expected a variable to be bound in 'exists' clause")
+    NewFormula::Quantifier {
+        inner: Box::new(inner_formula),
+        var: bound_variable,
+        quantifier,
     }
-    let bound_variable = variable_pair.as_str();
-
-    // 'inner' is the wrapping `formula` rule, so we go into that to get the inner formula type
-    let inner = eq.next().unwrap();
-    let inner_formula = parse_formula_pair(inner);
-
-    UniversalFormula::new(bound_variable, inner_formula)
 }
 
 /// Parse a pest `Pair` into a [`Formula`] `Box` pointer with the appropriate
 /// implementation of [`Formula`] by calling the corresponding function on the [`Pair<Rule>`]
-fn parse_formula_pair<'a>(pair: Pair<'a, Rule>) -> Box<dyn Formula + 'a> {
+fn parse_formula_pair(pair: Pair<Rule>) -> NewFormula {
     match pair.as_rule() {
-        Rule::negation => Box::from(parse_negation(&mut pair.into_inner())),
-        Rule::simple_equation => Box::from(parse_atomic_equation(&mut pair.into_inner())),
-        Rule::conjunction => Box::from(parse_conjunction(&mut pair.into_inner())),
-        Rule::disjunction => Box::from(parse_disjunction(&mut pair.into_inner())),
-        Rule::existential => Box::from(parse_existential(&mut pair.into_inner())),
-        Rule::universal => Box::from(parse_universal(&mut pair.into_inner())),
+        Rule::negation => parse_negation(&mut pair.into_inner()),
+        Rule::simple_equation => parse_equation(&mut pair.into_inner()),
+        Rule::conjunction => parse_conjunction(&mut pair.into_inner()),
+        Rule::disjunction => parse_disjunction(&mut pair.into_inner()),
+        Rule::existential => parse_quantifier(&mut pair.into_inner(), Quantifier::Existential),
+        Rule::universal => parse_quantifier(&mut pair.into_inner(), Quantifier::Universal),
 
         r => {
             panic!("Expected a formula type, found rule type {:?}", r);

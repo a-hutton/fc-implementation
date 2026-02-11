@@ -1,8 +1,8 @@
 #![cfg(test)]
 
 use crate::formula_parser::parse_formula_str;
-use crate::{find_solutions, print_solutions};
 use crate::strutils::CharOperator;
+use crate::{find_solutions, print_solutions};
 use std::time::Instant;
 
 #[derive(Copy, Clone)]
@@ -178,7 +178,7 @@ fn test_solutions() {
         match res {
             None => assert!(test.should_fail),
             Some(formula) => {
-                let solutions = find_solutions(&*formula, &universe_chars);
+                let solutions = find_solutions(&formula, &universe_chars);
                 println!("Found {n} solutions", n = solutions.len());
                 print_solutions(&solutions, test.universe);
                 assert_eq!(solutions.len(), test.num_solutions);
@@ -263,7 +263,7 @@ fn tests_from_literature() {
         match res {
             None => assert!(test.should_fail),
             Some(formula) => {
-                let solutions = find_solutions(&*formula, &universe_chars);
+                let solutions = find_solutions(&formula, &universe_chars);
                 println!("Found {n} solutions", n = solutions.len());
                 print_solutions(&solutions, test.universe);
                 assert_eq!(solutions.len(), test.num_solutions);
@@ -305,7 +305,7 @@ fn difficult_test() {
     let form = parse_formula_str(r#"Z=X"ab"Y && Z=Y"ba"X"#).unwrap();
     let universe = "ababaabababaababa";
     let universe_chars = CharOperator::new(universe);
-    let solutions = find_solutions(&*form, &universe_chars);
+    let solutions = find_solutions(&form, &universe_chars);
     print_solutions(&solutions, universe);
     println!("Time taken: {:.2}s", t1.elapsed().as_secs_f32());
 }

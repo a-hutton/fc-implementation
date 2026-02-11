@@ -130,7 +130,7 @@ pub enum NewFormula<'a> {
 }
 
 impl NewFormula<'_> {
-    fn check_substitution(&self, w: &CharOperator, substitution: &Substitution) -> bool {
+    pub fn check_substitution(&self, w: &CharOperator, substitution: &Substitution) -> bool {
         match self {
             NewFormula::Equation { lhs, rhs } => {
                 let lhs_value = substitution.value(lhs);
@@ -195,7 +195,7 @@ impl NewFormula<'_> {
         }
     }
 
-    fn free_vars(&self) -> Vec<&str> {
+    pub fn free_vars(&self) -> Vec<&str> {
         match self {
             NewFormula::Equation { lhs, rhs } => {
                 let mut free = vec![];
@@ -246,7 +246,7 @@ impl NewFormula<'_> {
         }
     }
 
-    fn constraints(&'_ self) -> VariableRelation<'_> {
+    pub fn constraints(&'_ self) -> VariableRelation<'_> {
         match self {
             NewFormula::Equation { lhs, rhs } => {
                 let rhs_variables: Vec<_> = rhs
