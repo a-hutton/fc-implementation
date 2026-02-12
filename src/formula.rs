@@ -14,31 +14,6 @@ pub enum EquationContent<'a> {
     Constant(&'a str),
 }
 
-/// Applies a [`Substitution`] to a `Vec` of [`EquationContent`] - either variables or constants.
-/// Constants do not have their values changed, variables are given their respective values from
-/// the provided [`Substitution`]
-fn substitute<'a>(
-    terms: &Vec<EquationContent<'a>>,
-    substitution: &Substitution<'a>,
-) -> Vec<&'a str> {
-    let mut new_terms = Vec::with_capacity(terms.len());
-    for term in terms {
-        match term {
-            EquationContent::Variable(v) => {
-                if !substitution.contains_key(v) {
-                    panic!("No substitution for (free) variable {:?}", v);
-                }
-                let val = substitution[*v];
-                new_terms.push(val);
-            }
-            EquationContent::Constant(c) => {
-                new_terms.push(*c);
-            }
-        }
-    }
-    new_terms
-}
-
 /// A common interface for all word formula types
 pub trait Formula: fmt::Display + fmt::Debug {
     fn free_vars(&self) -> Vec<&str>;
@@ -89,10 +64,9 @@ impl<'a> Formula for AtomicWordEquation<'a> {
         // if !substitution.contains_key(UNIVERSE_CONSTANT) {
         //     panic!("Missing universe constant `$U` (𝔲) in substitution")
         // }
-
         let lhs_vec = vec![EquationContent::Variable(self.lhs_variable)];
-        let lhs_sub = substitute(&lhs_vec, substitution).join("");
-        let rhs_sub = substitute(&self.rhs, substitution).join("");
+        let lhs_sub = substitution.apply(&lhs_vec).join("");
+        let rhs_sub = substitution.apply(&self.rhs).join("");
 
         lhs_sub == rhs_sub
     }
@@ -485,9 +459,17 @@ impl Formula for ExistentialFormula<'_> {
     /// new substitution is checked on the inner [`Formula::check_substitution`], returning
     /// `true` when the first valid substitution is found
     fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
-        let mut altered_substitution = substitution.clone();
+        let mut altered_substitution =
+            Substitution::from_vars(substitution.keys.clone(), substitution.universe_constant);
+        altered_substitution.keys.push(self.bound_var);
+        for val in &substitution.values {
+            altered_substitution.values.push(*val);
+        }
+        altered_substitution.values.push("");
+        let last_idx = altered_substitution.values.len() - 1;
+
         for factor in universe {
-            altered_substitution.insert(self.bound_var, factor);
+            altered_substitution.values[last_idx] = factor;
             let holds = self
                 .inner
                 .check_substitution(&altered_substitution, universe);
@@ -544,11 +526,17 @@ impl Formula for UniversalFormula<'_> {
     /// new substitution is checked on the inner [`Formula::check_substitution`], returning
     /// `true` if every new substitution holds
     fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
-        let universe_word = substitution[UNIVERSE_CONSTANT];
-        let all_factors = generate_factors(universe_word);
-        let mut altered_substitution = substitution.clone();
-        for factor in all_factors {
-            altered_substitution.insert(self.bound_var, factor);
+        let mut altered_substitution =
+            Substitution::from_vars(substitution.keys.clone(), substitution.universe_constant);
+        altered_substitution.keys.push(self.bound_var);
+        for val in &substitution.values {
+            altered_substitution.values.push(*val);
+        }
+        altered_substitution.values.push("");
+        let last_idx = altered_substitution.values.len() - 1;
+
+        for factor in universe {
+            altered_substitution.values[last_idx] = factor;
             let holds = self
                 .inner
                 .check_substitution(&altered_substitution, universe);

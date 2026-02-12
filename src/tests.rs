@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate::formula_parser::parse_formula_str;
-use crate::{find_solutions, print_solutions};
+use crate::{find_solutions, generate_factors, print_solutions};
 use std::time::Instant;
 
 #[derive(Copy, Clone)]
@@ -176,10 +176,11 @@ fn test_solutions() {
         match res {
             None => assert!(test.should_fail),
             Some(formula) => {
-                let solutions = find_solutions(&*formula, test.universe);
-                println!("Found {n} solutions", n = solutions.len());
-                print_solutions(&solutions, test.universe);
-                assert_eq!(solutions.len(), test.num_solutions);
+                let factors = generate_factors(test.universe);
+                let solutions = find_solutions(&*formula, test.universe, &factors);
+                let len = print_solutions(solutions, test.universe, formula.free_vars());
+                println!("Found {len} solutions");
+                assert_eq!(len, test.num_solutions);
             }
         }
         println!("-------- Test Passed --------\n")
@@ -260,10 +261,11 @@ fn tests_from_literature() {
         match res {
             None => assert!(test.should_fail),
             Some(formula) => {
-                let solutions = find_solutions(&*formula, test.universe);
-                println!("Found {n} solutions", n = solutions.len());
-                print_solutions(&solutions, test.universe);
-                assert_eq!(solutions.len(), test.num_solutions);
+                let factors = generate_factors(test.universe);
+                let solutions = find_solutions(&*formula, test.universe, &factors);
+                let len = print_solutions(solutions, test.universe, formula.free_vars());
+                assert_eq!(len, test.num_solutions);
+                println!("Found {len} solutions");
             }
         }
         println!("-------- Test Passed --------\n")
@@ -301,7 +303,8 @@ fn difficult_test() {
     let t1 = Instant::now();
     let form = parse_formula_str(r#"Z=X"ab"Y && Z=Y"ba"X"#).unwrap();
     let universe = "ababaabababaababa";
-    let solutions = find_solutions(&*form, universe);
-    print_solutions(&solutions, universe);
+    let factors = generate_factors(universe);
+    let solutions = find_solutions(&*form, universe, &factors);
+    print_solutions(solutions, universe, form.free_vars());
     println!("Time taken: {:.2}s", t1.elapsed().as_secs_f32());
 }
