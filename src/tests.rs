@@ -177,8 +177,8 @@ fn test_solutions() {
             None => assert!(test.should_fail),
             Some(formula) => {
                 let factors = generate_factors(test.universe);
-                let solutions = find_solutions(&*formula, test.universe, &factors);
-                let len = print_solutions(solutions, test.universe, formula.free_vars());
+                let solutions = find_solutions(&*formula, test.universe);
+                let len = print_solutions(&solutions, test.universe, formula.free_vars());
                 println!("Found {len} solutions");
                 assert_eq!(len, test.num_solutions);
             }
@@ -262,8 +262,8 @@ fn tests_from_literature() {
             None => assert!(test.should_fail),
             Some(formula) => {
                 let factors = generate_factors(test.universe);
-                let solutions = find_solutions(&*formula, test.universe, &factors);
-                let len = print_solutions(solutions, test.universe, formula.free_vars());
+                let solutions = find_solutions(&*formula, test.universe);
+                let len = print_solutions(&solutions, test.universe, formula.free_vars());
                 assert_eq!(len, test.num_solutions);
                 println!("Found {len} solutions");
             }
@@ -304,7 +304,7 @@ fn difficult_test() {
     let form = parse_formula_str(r#"Z=X"ab"Y && Z=Y"ba"X"#).unwrap();
     let universe = "ababaabababaababa";
     let factors = generate_factors(universe);
-    let solutions = find_solutions(&*form, universe, &factors);
-    print_solutions(solutions, universe, form.free_vars());
+    let solutions = find_solutions(&*form, universe);
+    print_solutions(&solutions, universe, form.free_vars());
     println!("Time taken: {:.2}s", t1.elapsed().as_secs_f32());
 }

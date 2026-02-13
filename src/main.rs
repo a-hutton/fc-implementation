@@ -27,11 +27,11 @@ fn main() {
         args.text.as_str()
     };
     let factors = generate_factors(text);
-    let solutions = find_solutions(&*parsed_formula, text, &factors);
+    let solutions = find_solutions(&*parsed_formula, text);
     if !args.quiet {
-        print_solutions(solutions, args.text.as_str(), parsed_formula.free_vars());
+        print_solutions(&solutions, args.text.as_str(), parsed_formula.free_vars());
     } else {
-        let count = solutions.fold(0, |x, _| x + 1);
+        let count = solutions.into_iter().fold(0, |x, _| x + 1);
         println!("Found {} solutions", count);
     }
 }
@@ -61,7 +61,11 @@ fn find_solutions<'a>(formula: &'a dyn Formula, word: &'a str) -> Vec<Substituti
 }
 
 /// Prints to stdout a pretty-printed CSV formatted table of all substitutions
-fn print_solutions<'a>(subs: &Vec<Substitution>, universe: &str, mut var_names: Vec<&'a str>,) -> usize{
+fn print_solutions<'a>(
+    subs: &Vec<Substitution>,
+    universe: &str,
+    mut var_names: Vec<&'a str>,
+) -> usize {
     if subs.is_empty() {
         println!("No satisfying assignments found");
         return 0;
@@ -156,6 +160,20 @@ impl<'a> Substitution<'a> {
             }
             self.values[var_idx]
         }
+    }
+
+    fn insert(&mut self, var: &'a str, value: &'a str) {
+        for (i, &key) in self.keys.iter().enumerate() {
+            if key == var {
+                if self.values.len() <= i {
+                    self.values.push(value);
+                } else {
+                    self.values[i] = value;
+                }
+                return;
+            }
+        }
+        panic!("Failed to insert {}", var);
     }
 
     fn apply(&self, terms: &Vec<EquationContent<'a>>) -> Vec<&'a str> {

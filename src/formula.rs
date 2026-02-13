@@ -1,4 +1,4 @@
-use crate::{generate_factors, print_solutions, strutils, Substitution};
+use crate::{print_solutions, strutils, Substitution};
 use itertools::Itertools;
 use std::collections::HashSet;
 use std::fmt;
@@ -95,7 +95,7 @@ enum LookBehind {
 }
 
 impl<'a> AtomicWordEquation<'a> {
-    fn rhs_assignments(&self, lhs_value: &'a str) -> Vec<Substitution<'a>> {
+    fn rhs_assignments(&'a self, lhs_value: &'a str) -> Vec<Substitution<'a>> {
         let lhs_chars = strutils::CharOperator::new(lhs_value);
 
         // TODO - filter out duplicates.... somehow
@@ -233,9 +233,11 @@ impl<'a> AtomicWordEquation<'a> {
             }
             combo_set.insert(combination.clone());
 
-            let mut sub = Substitution::new();
+            let free_vars = self.free_vars();
+            let mut sub = Substitution::from_vars(self.free_vars(), "");
             // TODO?
             // sub.insert(UNIVERSE_CONSTANT, "");
+
             sub.insert(self.lhs_variable, lhs_value);
             for (i, pattern_element) in self.rhs.iter().enumerate() {
                 let assignment = combination[i];
@@ -287,7 +289,7 @@ fn test_new_method() {
         ],
     );
     let sols = eq.rhs_assignments("bbabab");
-    print_solutions(&sols, "bbabab");
+    print_solutions(&sols, "bbabab", vec!["x", "y", "z", "q"]);
 }
 
 /// A formula φ∧ψ: the conjunction of two sub-formulas
