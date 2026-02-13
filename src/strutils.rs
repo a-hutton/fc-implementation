@@ -1,3 +1,4 @@
+use crate::generate_factors;
 use itertools::Itertools;
 
 pub struct CharOperator<'a> {
@@ -101,6 +102,10 @@ impl<'a> CharOperator<'a> {
 
     pub fn len(&self) -> usize {
         self.len
+    }
+
+    pub fn generate_factors(&self) -> Vec<&str> {
+        generate_factors(self.string)
     }
 }
 

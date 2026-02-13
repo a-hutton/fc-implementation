@@ -4,6 +4,7 @@ mod strutils;
 mod tests;
 
 use crate::formula::{EquationContent, Formula, UNIVERSE_CONSTANT};
+use crate::strutils::CharOperator;
 use clap::Parser;
 use itertools::Itertools;
 use std::fs;
@@ -27,7 +28,8 @@ fn main() {
         args.text.as_str()
     };
     let factors = generate_factors(text);
-    let solutions = find_solutions(&*parsed_formula, text);
+    let chars = CharOperator::new(text);
+    let solutions = find_solutions(&parsed_formula, &chars);
     if !args.quiet {
         print_solutions(&solutions, args.text.as_str(), parsed_formula.free_vars());
     } else {
@@ -53,11 +55,8 @@ struct Args {
 
 /// Find all the assignments to variables in a formula based on values in the universe of
 /// substrings of `word` that satisfy the given formula.
-fn find_solutions<'a>(formula: &'a dyn Formula, word: &'a str) -> Vec<Substitution<'a>> {
-    let free_vars = formula.free_vars();
-    let universe = generate_factors(word);
-    let solutions = formula.all_solutions(&universe);
-    todo!()
+fn find_solutions<'a>(formula: &'a Formula, word: &'a CharOperator) -> Vec<Substitution<'a>> {
+    formula.all_solutions(&word)
 }
 
 /// Prints to stdout a pretty-printed CSV formatted table of all substitutions
@@ -132,6 +131,7 @@ fn generate_factors(w: &str) -> Vec<&str> {
 
 /// Represents a substitution (σ in the literature). An assignment mapping variable names to values
 /// from the universe
+#[derive(Eq, PartialEq, Hash)]
 struct Substitution<'a> {
     keys: Vec<&'a str>,
     values: Vec<&'a str>,
