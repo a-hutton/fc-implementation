@@ -27,7 +27,6 @@ fn main() {
     } else {
         args.text.as_str()
     };
-    let factors = generate_factors(text);
     let chars = CharOperator::new(text);
     let solutions = find_solutions(&parsed_formula, &chars);
     if !args.quiet {
@@ -131,17 +130,17 @@ fn generate_factors(w: &str) -> Vec<&str> {
 
 /// Represents a substitution (σ in the literature). An assignment mapping variable names to values
 /// from the universe
-#[derive(Eq, PartialEq, Hash)]
+#[derive(Eq, PartialEq, Hash, Debug)]
 struct Substitution<'a> {
     keys: Vec<&'a str>,
     values: Vec<&'a str>,
     universe_constant: &'a str,
 }
 impl<'a> Substitution<'a> {
-    fn from_vars(vars: Vec<&'a str>, w: &'a str) -> Self {
+    fn from_vars(vars: &[&'a str], w: &'a str) -> Self {
         let len = vars.len();
         Substitution {
-            keys: vars,
+            keys: Vec::from(vars),
             values: Vec::with_capacity(len),
             universe_constant: w,
         }
@@ -215,7 +214,7 @@ fn all_possible_substitutions<'a>(
     let mut subs_iter = var_vals_iter.multi_cartesian_product();
     std::iter::from_fn(move || {
         if let Some(sub_vals) = subs_iter.next() {
-            let mut sub = Substitution::from_vars(var_names.clone(), w);
+            let mut sub = Substitution::from_vars(&var_names, w);
             for i in 0..sub_vals.len() {
                 sub.values.push(sub_vals[i]);
             }

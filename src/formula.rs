@@ -1,7 +1,7 @@
 use crate::strutils::CharOperator;
 use crate::{print_solutions, strutils, Substitution};
 use itertools::Itertools;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub const UNIVERSE_CONSTANT: &str = "$U";
 
@@ -71,10 +71,8 @@ impl<'a> Formula<'a> {
                 var,
                 quantifier,
             } => {
-                let mut altered_substitution = Substitution::from_vars(
-                    substitution.keys.clone(),
-                    substitution.universe_constant,
-                );
+                let mut altered_substitution =
+                    Substitution::from_vars(&substitution.keys, substitution.universe_constant);
                 altered_substitution.keys.push(var);
                 for val in &substitution.values {
                     altered_substitution.values.push(*val);
@@ -164,9 +162,9 @@ impl<'a> Formula<'a> {
                 // TODO - special case for $U
                 let mut substitutions = Vec::new();
                 for lhs_value in w.generate_factors() {
-                    // For each possible value for the lhs variable
-                    let subs_for_val = rhs_assignments(lhs_value, lhs, rhs, self);
-                    substitutions.extend(subs_for_val);
+                    // solutions_for_equation(lhs_value, lhs, rhs);
+                    let lhs_chars = CharOperator::new(lhs);
+                    let lhs_factors = lhs_chars.generate_factors();
                 }
                 substitutions
             }
@@ -205,6 +203,134 @@ impl<'a> Formula<'a> {
             }
         }
     }
+}
+
+struct EquationVariable<'a> {
+    name: &'a str,
+    follows_const: Option<&'a str>,
+}
+
+enum PatternAssignmentAtom<'a> {
+    VariableAssignment { var: &'a str, value: &'a str },
+    ConstantAssignment { value: &'a str, pos: usize },
+}
+
+fn solutions_for_equation(
+    lhs_assignment: &CharOperator,
+    lhs_var: &str,
+    rhs: &[EquationContent],
+) -> Option<()> {
+    // string constants in the order in which they appear in the formula
+    let mut constants = Vec::new();
+    let mut const_positions = HashMap::new();
+    let mut formula_vars = Vec::new();
+    for component in rhs {
+        match component {
+            EquationContent::Variable(var) => {
+                formula_vars.push(*var);
+            }
+            EquationContent::Constant(val) => {
+                constants.push(*val);
+                let positions = lhs_assignment.find(val);
+                if positions.is_empty() {
+                    // lhs assignment doesn't contain a required constant in the equation rhs
+                    return None;
+                } else {
+                    const_positions.insert(*val, positions);
+                }
+            }
+        }
+    }
+
+    // TODO These loops can probably be combined
+    let mut variable_sequences: Vec<Vec<&str>> = Vec::new();
+    let mut var_seq_idx = 0;
+    for component in rhs {
+        match component {
+            EquationContent::Variable(var) => {
+                if var_seq_idx >= variable_sequences.len() {
+                    variable_sequences.push(Vec::new());
+                }
+                variable_sequences[var_seq_idx].push(*var);
+            }
+            EquationContent::Constant(val) => {
+                var_seq_idx += 1;
+                if !variable_sequences[variable_sequences.len() - 1].is_empty() {
+                    variable_sequences.push(Vec::new());
+                }
+            }
+        }
+    }
+
+    let mut partial_assignments = Vec::new();
+    match rhs[0] {
+        EquationContent::Variable(_) => {
+            // positions of first constant
+            let const_positions = &const_positions[constants[0]];
+            for &const_position in const_positions {
+                let prefix_operator =
+                    CharOperator::new(lhs_assignment.substring(0, const_position));
+
+                // assign the variables that came before this constant
+                let var_sequence = &variable_sequences[0];
+                let assignment_values = partition_string(&prefix_operator, var_sequence.len());
+                for values in assignment_values {
+                    let mut partial_assignment =
+                        Substitution::from_vars(var_sequence, lhs_assignment.as_str());
+                    for (i, values) in values.iter().enumerate() {
+                        partial_assignment.values.push(values);
+                    }
+                    partial_assignments.push(partial_assignment);
+                }
+            }
+        }
+        EquationContent::Constant(_) => {}
+    }
+    println!("assignments: {:?}", partial_assignments);
+
+    Some(())
+}
+
+#[test]
+fn test_new_eq_solver() {
+    let lhs_assignment = CharOperator::new("abcdeafa");
+    solutions_for_equation(
+        &lhs_assignment,
+        "x",
+        &[
+            EquationContent::Variable("q"),
+            EquationContent::Variable("w"),
+            EquationContent::Variable("r"),
+            EquationContent::Constant("a"),
+            EquationContent::Variable("s"),
+        ],
+    );
+}
+
+fn partition_string<'a>(string: &CharOperator<'a>, num_vars: usize) -> Vec<Vec<&'a str>> {
+    let partition_positions = (0..string.len() + 1).combinations_with_replacement(num_vars - 1);
+    let mut substitutions = Vec::with_capacity(partition_positions.try_len().unwrap());
+    for partition_position in partition_positions {
+        let mut partition_position = partition_position;
+        partition_position.insert(0, 0);
+        partition_position.push(string.len());
+        let sub = if string.len() == 0 {
+            vec![""; num_vars]
+        } else {
+            string.multi_substring(&partition_position)
+        };
+        substitutions.push(sub);
+    }
+    substitutions
+}
+
+#[test]
+fn test_partitions() {
+    let s = CharOperator::new("abcde");
+    let n = 3;
+    let partitions = partition_string(&s, n);
+    println!("{:?}", partitions);
+    assert_eq!(partitions.len(), 21);
 }
 
 fn rhs_assignments<'a>(
@@ -351,7 +477,7 @@ fn rhs_assignments<'a>(
         combo_set.insert(combination.clone());
 
         let free_vars = formula.free_vars();
-        let mut sub = Substitution::from_vars(formula.free_vars(), "");
+        let mut sub = Substitution::from_vars(&formula.free_vars(), "");
         // TODO?
         // sub.insert(UNIVERSE_CONSTANT, "");
 

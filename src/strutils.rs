@@ -79,6 +79,17 @@ impl<'a> CharOperator<'a> {
         &self.string[self.char_byte_indices[start]..self.char_byte_indices[end]]
     }
 
+    pub fn multi_substring(&self, positions: &[usize]) -> Vec<&'a str> {
+        // TODO - should this be an iterator (iterfunc?)
+        let mut substrings = Vec::with_capacity(positions.len());
+        for i in 1..positions.len() {
+            let start_index = self.char_byte_indices[positions[i - 1]];
+            let end_index = self.char_byte_indices[positions[i]];
+            substrings.push(&self.string[start_index..end_index]);
+        }
+        substrings
+    }
+
     pub fn find(&self, needle: &str) -> Vec<usize> {
         let byte_matches = self
             .string
@@ -102,6 +113,10 @@ impl<'a> CharOperator<'a> {
 
     pub fn len(&self) -> usize {
         self.len
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.string
     }
 
     pub fn generate_factors(&self) -> Vec<&str> {
