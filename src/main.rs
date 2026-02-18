@@ -30,7 +30,7 @@ fn main() {
     let chars = CharOperator::new(text);
     let solutions = find_solutions(&parsed_formula, &chars);
     if !args.quiet {
-        print_solutions(&solutions, args.text.as_str(), parsed_formula.free_vars());
+        print_solutions(&solutions, args.text.as_str());
     } else {
         let count = solutions.into_iter().fold(0, |x, _| x + 1);
         println!("Found {} solutions", count);
@@ -55,23 +55,20 @@ struct Args {
 /// Find all the assignments to variables in a formula based on values in the universe of
 /// substrings of `word` that satisfy the given formula.
 fn find_solutions<'a>(formula: &'a Formula, word: &'a CharOperator) -> Vec<Substitution<'a>> {
-    formula.all_solutions(&word)
+    formula.all_solutions(word)
 }
 
 /// Prints to stdout a pretty-printed CSV formatted table of all substitutions
-fn print_solutions<'a>(
-    subs: &Vec<Substitution>,
-    universe: &str,
-    mut var_names: Vec<&'a str>,
-) -> usize {
+fn print_solutions(subs: &Vec<Substitution>, universe: &str) -> usize {
     if subs.is_empty() {
         println!("No satisfying assignments found");
         return 0;
     }
-    var_names.sort();
-    // guaranteed to be the longest variable, helps for printing as a 'table'
-    let universe_len = UnicodeSegmentation::graphemes(universe, true).count();
 
+    // guaranteed to be the longest variable, helps for printing as a 'table'
+    let universe_len = strutils::count_chars(universe);
+
+    let var_names = &subs[0].keys;
     // print var names
     for (i, var_name) in var_names.iter().enumerate() {
         print!("{var:width$}", var = var_name, width = universe_len);
@@ -139,8 +136,15 @@ struct Substitution<'a> {
 impl<'a> Substitution<'a> {
     fn from_vars(vars: &[&'a str], w: &'a str) -> Self {
         let len = vars.len();
+        let mut keys = Vec::with_capacity(vars.len());
+        for var in vars {
+            if !keys.contains(var) {
+                keys.push(var);
+            }
+        }
+
         Substitution {
-            keys: Vec::from(vars),
+            keys,
             values: Vec::with_capacity(len),
             universe_constant: w,
         }
@@ -175,7 +179,7 @@ impl<'a> Substitution<'a> {
         panic!("Failed to insert {}", var);
     }
 
-    fn apply(&self, terms: &Vec<EquationContent<'a>>) -> Vec<&'a str> {
+    fn apply(&self, terms: &[EquationContent<'a>]) -> Vec<&'a str> {
         let mut new_terms = Vec::with_capacity(terms.len());
         for term in terms {
             match term {

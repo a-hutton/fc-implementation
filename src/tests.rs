@@ -179,7 +179,7 @@ fn test_solutions() {
             Some(formula) => {
                 let w = CharOperator::new(test.universe);
                 let solutions = find_solutions(&formula, &w);
-                let len = print_solutions(&solutions, test.universe, formula.free_vars());
+                let len = print_solutions(&solutions, test.universe);
                 println!("Found {len} solutions");
                 assert_eq!(len, test.num_solutions);
             }
@@ -264,7 +264,7 @@ fn tests_from_literature() {
             Some(formula) => {
                 let w = CharOperator::new(test.universe);
                 let solutions = find_solutions(&formula, &w);
-                let len = print_solutions(&solutions, test.universe, formula.free_vars());
+                let len = print_solutions(&solutions, test.universe);
                 assert_eq!(len, test.num_solutions);
                 println!("Found {len} solutions");
             }
@@ -306,6 +306,6 @@ fn difficult_test() {
     let universe = "ababaabababaababa";
     let chars = CharOperator::new(universe);
     let solutions = find_solutions(&form, &chars);
-    print_solutions(&solutions, universe, form.free_vars());
+    print_solutions(&solutions, universe);
     println!("Time taken: {:.2}s", t1.elapsed().as_secs_f32());
 }

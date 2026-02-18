@@ -135,3 +135,8 @@ fn test_chars_substring() {
 
     assert_eq!(CharOperator::new("a🦩a").substring(1, 2), "🦩");
 }
+
+pub fn count_chars(string: &str) -> usize {
+    let operator = CharOperator::new(string);
+    operator.len
+}

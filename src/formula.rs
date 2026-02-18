@@ -215,11 +215,13 @@ enum PatternAssignmentAtom<'a> {
     ConstantAssignment { value: &'a str, pos: usize },
 }
 
-fn solutions_for_equation(
-    lhs_assignment: &CharOperator,
+/// It is assumed that `rhs` starts and ends with a variable, otherwise the string `lhs_assignment`
+/// can be trimmed according to the surrounding constants on the rhs
+fn solutions_for_equation<'a>(
+    lhs_assignment: &'a CharOperator,
     lhs_var: &str,
-    rhs: &[EquationContent],
-) -> Option<()> {
+    rhs: &'a [EquationContent],
+) -> Vec<Substitution<'a>> {
     // string constants in the order in which they appear in the formula
     let mut constants = Vec::new();
     let mut const_positions = HashMap::new();
@@ -234,7 +236,7 @@ fn solutions_for_equation(
                 let positions = lhs_assignment.find(val);
                 if positions.is_empty() {
                     // lhs assignment doesn't contain a required constant in the equation rhs
-                    return None;
+                    return vec![];
                 } else {
                     const_positions.insert(*val, positions);
                 }
@@ -261,40 +263,122 @@ fn solutions_for_equation(
             }
         }
     }
+    // Case: no constants on rhs
+    if constants.is_empty() {
+        // all possible 'partition' assignments to rhs vars are satisfying, unless a variable appears multiple times
+        let mut assignments = Vec::new();
+        let assignment_values = partition_string(lhs_assignment, formula_vars.len());
+        for assignment in assignment_values {
+            let mut substitution = Substitution::from_vars(&formula_vars, lhs_assignment.as_str());
+            for (i, var) in formula_vars.iter().enumerate() {
+                substitution.insert(var, assignment[i]);
+            }
+            // TODO - is there a better way than this?
+            let result_str = substitution.apply(rhs);
+            let result_str = result_str.join("");
+            if result_str == lhs_assignment.as_str() {
+                assignments.push(substitution);
+            }
+        }
+        return assignments;
+    }
 
     let mut partial_assignments = Vec::new();
-    match rhs[0] {
-        EquationContent::Variable(_) => {
-            // positions of first constant
-            let const_positions = &const_positions[constants[0]];
-            for &const_position in const_positions {
-                let prefix_operator =
-                    CharOperator::new(lhs_assignment.substring(0, const_position));
+    // Contains the index and length of the constant that follows the assignments in partial_assignments
+    let mut corresponding_constant_info = Vec::new();
 
-                // assign the variables that came before this constant
-                let var_sequence = &variable_sequences[0];
-                let assignment_values = partition_string(&prefix_operator, var_sequence.len());
-                for values in assignment_values {
-                    let mut partial_assignment =
-                        Substitution::from_vars(var_sequence, lhs_assignment.as_str());
-                    for (i, values) in values.iter().enumerate() {
-                        partial_assignment.values.push(values);
-                    }
-                    partial_assignments.push(partial_assignment);
+    let mut constants_analysed = 0;
+
+    // positions of first constant
+    let constant = constants[0];
+    let first_const_positions = &const_positions[constant];
+    for &const_position in first_const_positions {
+        let prefix_operator = CharOperator::new(lhs_assignment.substring(0, const_position));
+
+        // assign the variables that came before this constant
+        let var_sequence = &variable_sequences[0];
+        let assignment_values = partition_string(&prefix_operator, var_sequence.len());
+        for values in assignment_values {
+            let mut partial_assignment =
+                Substitution::from_vars(var_sequence, lhs_assignment.as_str());
+            for (i, values) in values.iter().enumerate() {
+                partial_assignment.values.push(values);
+            }
+            partial_assignments.push(partial_assignment);
+            corresponding_constant_info.push((const_position, strutils::count_chars(constant)));
+        }
+    }
+    constants_analysed += 1;
+
+    // TODO - now we need to deal with variables that come after the first constant
+
+    if constants_analysed == constants.len() {
+        // all constants dealt with
+        // now see which variables haven't been assigned to yet. This will be the same across all
+        //  assignments in partial_assignments
+        let mut remaining_vars = formula_vars.clone();
+        for var in &partial_assignments[0].keys {
+            let idx = remaining_vars.iter().find_position(|&v| v == var);
+            if let Some((idx, _)) = idx {
+                remaining_vars.swap_remove(idx);
+            }
+        }
+        println!("Unassigned vars: {:?}", remaining_vars);
+        let mut satisfying_assignments = Vec::new();
+        for (i, partial_assignment) in partial_assignments.iter().enumerate() {
+            // Now we split the remaining lhs assignment string among the remaining variables, using
+            // the additional array to discover where each partial assignment 'ends' in the lhs string
+            let (const_idx, const_len) = corresponding_constant_info[i];
+            let remaining_string =
+                lhs_assignment.substring(const_idx + const_len, lhs_assignment.len());
+            let remaining_string = CharOperator::new(remaining_string);
+
+            let remaining_assignment_values =
+                partition_string(&remaining_string, remaining_vars.len());
+            for values in remaining_assignment_values {
+                let mut complete_assignment =
+                    Substitution::from_vars(&formula_vars, lhs_assignment.as_str());
+                for j in 0..partial_assignment.keys.len() {
+                    complete_assignment
+                        .insert(partial_assignment.keys[j], partial_assignment.values[j]);
+                }
+
+                for j in 0..values.len() {
+                    complete_assignment.insert(remaining_vars[j], values[j]);
+                }
+
+                // TODO - is this necessary/can it be improved?
+                if complete_assignment.apply(rhs).join("") == lhs_assignment.as_str() {
+                    satisfying_assignments.push(complete_assignment);
                 }
             }
         }
-        EquationContent::Constant(_) => {}
+        return satisfying_assignments;
     }
+
+    if constants.len() > 1 {
+        todo!("Cases where there are multiple constants")
+    }
+
     println!("assignments: {:?}", partial_assignments);
 
-    Some(())
+    // Now check these partial assignments, they may not all be correct across all 'shortcuts' between constants
+    // TODO - is there a better 'general' way of doing this?
+    let mut satisfying_assignments = Vec::with_capacity(partial_assignments.len());
+    for substitution in partial_assignments {
+        let result_str = substitution.apply(rhs);
+        let result_str = result_str.join("");
+        if result_str == lhs_assignment.as_str() {
+            satisfying_assignments.push(substitution);
+        }
+    }
+    satisfying_assignments
 }
 
 #[test]
 fn test_new_eq_solver() {
     let lhs_assignment = CharOperator::new("abcdeafa");
-    solutions_for_equation(
+    let sols = solutions_for_equation(
         &lhs_assignment,
         "x",
         &[
@@ -305,6 +389,7 @@ fn test_new_eq_solver() {
             EquationContent::Variable("s"),
         ],
     );
+    print_solutions(&sols, lhs_assignment.as_str());
 }
 
 fn partition_string<'a>(string: &CharOperator<'a>, num_vars: usize) -> Vec<Vec<&'a str>> {
@@ -526,5 +611,5 @@ fn test_new_method() {
     };
     let w = CharOperator::new("bbabab");
     let sols = eq.all_solutions(&w);
-    print_solutions(&sols, "bbabab", vec!["x", "y", "z", "q"]);
+    print_solutions(&sols, "bbabab");
 }
