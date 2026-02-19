@@ -150,6 +150,34 @@ impl<'a> Substitution<'a> {
         }
     }
 
+    fn join(a: &Substitution<'a>, b: &Substitution<'a>) -> Result<Substitution<'a>, String> {
+        let mut new_keys = Vec::with_capacity(a.keys.len() + b.keys.len());
+        new_keys.extend(a.keys.clone());
+        let mut new_values = Vec::with_capacity(a.values.len() + b.values.len());
+        new_values.extend(a.values.clone());
+
+        for (i, var) in b.keys.iter().enumerate() {
+            if a.keys.contains(var) {
+                let a_val = a.value(var);
+                let b_val = b.value(var);
+                if a_val != b_val {
+                    return Err(format!(
+                        "Substitutions both contain variable {}, but assign different values. {} != {}",
+                        var, a_val, b_val
+                    ));
+                }
+            } else {
+                new_keys.push(var);
+                new_values.push(b.values[i]);
+            }
+        }
+        Ok(Substitution {
+            keys: new_keys,
+            values: new_values,
+            universe_constant: a.universe_constant,
+        })
+    }
+
     fn value(&self, var: &str) -> &str {
         if var == UNIVERSE_CONSTANT {
             self.universe_constant
