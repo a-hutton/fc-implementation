@@ -1,5 +1,5 @@
 use crate::strutils::CharOperator;
-use crate::{print_solutions, strutils, Substitution};
+use crate::{print_solutions, Substitution};
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 
@@ -321,7 +321,6 @@ fn solutions_for_equation<'a>(
     for i in 0..len {
 
     }*/
-    let s = variable_sequences.clone();
     let combined_assignments = equation_assignments(
         &formula_vars,
         &variable_sequences_end_indices,
@@ -332,13 +331,7 @@ fn solutions_for_equation<'a>(
         .into_iter()
         .filter(|sub| {
             let applied_str = sub.apply(rhs).join("");
-            println!(
-                "{}, {} | {}",
-                applied_str,
-                lhs_assignment.as_str(),
-                applied_str == lhs_assignment.as_str()
-            );
-            return applied_str == lhs_assignment.as_str();
+            applied_str == lhs_assignment.as_str()
         })
         .collect_vec();
     print_solutions(&satisfying_assignments, lhs_assignment.as_str());
@@ -350,8 +343,8 @@ fn solutions_for_equation<'a>(
 /// `variable_sequences`, then the first constant in `combined_constants`, and so on, alternating.
 /// Starts and ends with a variable.
 fn equation_assignments<'a>(
-    variables: &'a Vec<&'a str>, // this is the problematic lifetime
-    variable_sequence_indices: &Vec<usize>,
+    variables: &[&'a str],
+    variable_sequence_indices: &[usize],
     constants: &Vec<&str>,
     lhs_assignment: &CharOperator<'a>,
 ) -> Vec<Substitution<'a>> {
@@ -369,7 +362,7 @@ fn equation_assignments<'a>(
             vec![0]
         } else {
             let (len, indices) = &const_positions[i - 1];
-            indices.into_iter().map(|i| i + len).collect_vec()
+            indices.iter().map(|i| i + len).collect_vec()
         };
         let var_sequence = &variables[var_sequence_start_idx..var_sequence_end_idx];
         let possible_end_indices = if i == variable_sequence_indices.len() - 1 {
@@ -388,65 +381,6 @@ fn equation_assignments<'a>(
 
         constituent_partial_assignments.push(partial_assignments);
         var_sequence_start_idx = var_sequence_end_idx;
-
-        /*match &compressed_rhs[i] {
-            CompressedRHS::VariableSequence(var_sequence) => {
-                // also need the variables after the last constant
-                if i == compressed_rhs.len() - 1 {
-                    let num_consts_considered = const_indices.len();
-                    let (preceding_const_len, const_start_indices): &(usize, Vec<usize>) =
-                        &const_indices[num_consts_considered - 1];
-
-                    let mut possible_start_indices = Vec::with_capacity(const_start_indices.len());
-                    for &const_start_idx in const_start_indices {
-                        let var_start_idx = const_start_idx + preceding_const_len;
-                        possible_start_indices.push(var_start_idx);
-                    }
-
-                    let possible_end_indices = &vec![lhs_assignment.len()];
-                    let partial_assignments = var_sequence_partial_assignment(
-                        var_sequence,
-                        lhs_assignment,
-                        &possible_start_indices,
-                        possible_end_indices,
-                    );
-                    constituent_partial_assignments.push(partial_assignments);
-                }
-            }
-            CompressedRHS::CombinedConstants(consts) => {
-                let indices = lhs_assignment.find(consts);
-                const_indices.push((consts.len(), indices));
-                let preceding_vars = &compressed_rhs[i - 1];
-                if let CompressedRHS::VariableSequence(preceding_var_sequence) = preceding_vars {
-                    // These variables could form a sequence taking the value from any of the possible
-                    // substrings between the constant values
-                    let num_consts_considered = const_indices.len();
-                    let possible_start_indices = if num_consts_considered == 1 {
-                        vec![0]
-                    } else {
-                        let (preceding_const_len, previous_const_start_indices) =
-                            &const_indices[num_consts_considered - 2];
-                        let mut start_indices =
-                            Vec::with_capacity(previous_const_start_indices.len());
-                        for &const_start_idx in previous_const_start_indices {
-                            let var_start_idx = const_start_idx + preceding_const_len;
-                            start_indices.push(var_start_idx);
-                        }
-                        start_indices
-                    };
-                    let (_, possible_end_indices) = &const_indices[num_consts_considered - 1];
-                    let partial_assignments = var_sequence_partial_assignment(
-                        preceding_var_sequence,
-                        lhs_assignment,
-                        &possible_start_indices,
-                        possible_end_indices,
-                    );
-                    constituent_partial_assignments.push(partial_assignments);
-                } else {
-                    unreachable!()
-                }
-            }
-        }*/
     }
 
     let combined_assignments = constituent_partial_assignments.into_iter().reduce(|a, b| {
@@ -475,7 +409,7 @@ fn equation_assignments<'a>(
 
 /// All assignments to a variable sequence across possible combinations of start/end indices
 fn var_sequence_partial_assignment<'a>(
-    var_sequence: &'a [&str],
+    var_sequence: &[&'a str],
     lhs_assignment: &CharOperator<'a>,
     possible_start_indices: &Vec<usize>,
     possible_end_indices: &Vec<usize>,
@@ -496,7 +430,7 @@ fn var_sequence_partial_assignment<'a>(
 
 /// Finds partial assignments for the variables in `var_sequence` to make the substring
 fn equation_subsequence_solutions<'a>(
-    var_sequence: &'a [&str],
+    var_sequence: &[&'a str],
     lhs_substring: &'a str,
 ) -> impl Iterator<Item = Substitution<'a>> {
     let lhs_chars = CharOperator::new(lhs_substring);
@@ -587,7 +521,7 @@ fn rhs_assignments<'a>(
     rhs: &Vec<EquationContent<'a>>,
     formula: &'a Formula<'_>,
 ) -> Vec<Substitution<'a>> {
-    let lhs_chars = strutils::CharOperator::new(lhs_value);
+    let lhs_chars = CharOperator::new(lhs_value);
 
     // TODO - filter out duplicates.... somehow
     // TODO - filter out obvious fails as consts must be in sequence
@@ -734,7 +668,7 @@ fn rhs_assignments<'a>(
             let assignment = combination[i];
             match pattern_element {
                 EquationContent::Variable(var) => {
-                    sub.insert(*var, assignment);
+                    sub.insert(var, assignment);
                 }
                 EquationContent::Constant(val) => {
                     assert_eq!(*val, assignment)
