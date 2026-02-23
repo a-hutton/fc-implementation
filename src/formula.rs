@@ -205,14 +205,19 @@ impl<'a> Formula<'a> {
     }
 }
 
-struct EquationVariable<'a> {
-    name: &'a str,
-    follows_const: Option<&'a str>,
+enum CompressedRHS<'a> {
+    VariableSequence(Vec<&'a str>),
+    CombinedConstants(&'a str),
 }
 
-enum PatternAssignmentAtom<'a> {
-    VariableAssignment { var: &'a str, value: &'a str },
-    ConstantAssignment { value: &'a str, pos: usize },
+fn extract_vars<'a>(rhs: &'a [EquationContent]) -> Vec<&'a str> {
+    let mut vars = Vec::with_capacity(rhs.len());
+    for component in rhs {
+        if let EquationContent::Variable(var) = component {
+            vars.push(*var);
+        }
+    }
+    vars
 }
 
 /// It is assumed that `rhs` starts and ends with a variable, otherwise the string `lhs_assignment`
@@ -225,11 +230,11 @@ fn solutions_for_equation<'a>(
     // string constants in the order in which they appear in the formula
     let mut constants = Vec::new();
     let mut const_positions = HashMap::new();
-    let mut formula_vars = Vec::new();
+    // let mut formula_vars = Vec::new();
     for component in rhs {
         match component {
             EquationContent::Variable(var) => {
-                formula_vars.push(*var);
+                // formula_vars.push(*var);
             }
             EquationContent::Constant(val) => {
                 constants.push(*val);
@@ -244,22 +249,21 @@ fn solutions_for_equation<'a>(
         }
     }
 
-    enum CompressedRHS<'a> {
-        VariableSequence(Vec<&'a str>),
-        CombinedConstants(String),
-    }
-
     let mut compressed_rhs = Vec::new();
     // TODO These loops can probably be combined
     let mut variable_sequences: Vec<Vec<&str>> = Vec::new();
+    let mut variable_sequences_end_indices = Vec::new();
+    let mut combined_constants = Vec::new();
     let mut var_seq_idx = 0;
+    let mut var_counter = 0;
     for component in rhs {
         match component {
             EquationContent::Variable(var) => {
                 if var_seq_idx >= variable_sequences.len() {
                     variable_sequences.push(Vec::new());
                 }
-                variable_sequences[var_seq_idx].push(*var);
+                var_counter += 1;
+                variable_sequences[var_seq_idx].push(var);
 
                 if compressed_rhs.is_empty() {
                     compressed_rhs.push(CompressedRHS::VariableSequence(vec![var]));
@@ -278,20 +282,28 @@ fn solutions_for_equation<'a>(
                 if !variable_sequences[variable_sequences.len() - 1].is_empty() {
                     variable_sequences.push(Vec::new());
                 }
+                variable_sequences_end_indices.push(var_counter);
+
+                combined_constants.push(*val);
 
                 if compressed_rhs.is_empty() {
-                    compressed_rhs.push(CompressedRHS::CombinedConstants(String::from(*val)));
+                    compressed_rhs.push(CompressedRHS::CombinedConstants(val));
                 } else {
                     let last = compressed_rhs.last_mut().unwrap();
                     match last {
-                        CompressedRHS::VariableSequence(_) => compressed_rhs
-                            .push(CompressedRHS::CombinedConstants(String::from(*val))),
-                        CompressedRHS::CombinedConstants(vals) => vals.push_str(val),
+                        CompressedRHS::VariableSequence(_) => {
+                            compressed_rhs.push(CompressedRHS::CombinedConstants(val))
+                        }
+                        CompressedRHS::CombinedConstants(_) => {
+                            todo!("Handling of combining constants")
+                        }
                     }
                 }
             }
         }
     }
+    let formula_vars = extract_vars(rhs);
+    variable_sequences_end_indices.push(formula_vars.len());
 
     // Case: no constants on rhs
     if constants.is_empty() {
@@ -302,12 +314,82 @@ fn solutions_for_equation<'a>(
 
     // compressed rhs will alternate between a constant (or constant concatenation), and a sequence of variables
     // starting and ending with a variable sequence
-    let mut const_indices = Vec::with_capacity(constants.len());
+    // let mut const_indices = Vec::with_capacity(constants.len());
 
-    let mut constituent_partial_assignments = Vec::new();
+    /*let mut constituent_partial_assignments = Vec::new();
+    let len = compressed_rhs.len();
+    for i in 0..len {
 
-    for i in 0..compressed_rhs.len() {
-        match &compressed_rhs[i] {
+    }*/
+    let s = variable_sequences.clone();
+    let combined_assignments = equation_assignments(
+        &formula_vars,
+        &variable_sequences_end_indices,
+        &combined_constants,
+        lhs_assignment,
+    );
+    let satisfying_assignments = combined_assignments
+        .into_iter()
+        .filter(|sub| {
+            let applied_str = sub.apply(rhs).join("");
+            println!(
+                "{}, {} | {}",
+                applied_str,
+                lhs_assignment.as_str(),
+                applied_str == lhs_assignment.as_str()
+            );
+            return applied_str == lhs_assignment.as_str();
+        })
+        .collect_vec();
+    print_solutions(&satisfying_assignments, lhs_assignment.as_str());
+    return satisfying_assignments;
+    todo!()
+}
+
+/// Returns assignments that satisfy the equation formed by taking the first variable sequence in
+/// `variable_sequences`, then the first constant in `combined_constants`, and so on, alternating.
+/// Starts and ends with a variable.
+fn equation_assignments<'a>(
+    variables: &'a Vec<&'a str>, // this is the problematic lifetime
+    variable_sequence_indices: &Vec<usize>,
+    constants: &Vec<&str>,
+    lhs_assignment: &CharOperator<'a>,
+) -> Vec<Substitution<'a>> {
+    let mut const_positions = Vec::with_capacity(constants.len());
+    for constant in constants {
+        let positions = lhs_assignment.find(constant);
+        const_positions.push((constant.len(), positions));
+    }
+
+    let mut constituent_partial_assignments = Vec::with_capacity(variable_sequence_indices.len());
+
+    let mut var_sequence_start_idx = 0;
+    for (i, &var_sequence_end_idx) in variable_sequence_indices.iter().enumerate() {
+        let possible_start_indices = if i == 0 {
+            vec![0]
+        } else {
+            let (len, indices) = &const_positions[i - 1];
+            indices.into_iter().map(|i| i + len).collect_vec()
+        };
+        let var_sequence = &variables[var_sequence_start_idx..var_sequence_end_idx];
+        let possible_end_indices = if i == variable_sequence_indices.len() - 1 {
+            &vec![lhs_assignment.len()]
+        } else {
+            let (_, indices) = &const_positions[i];
+            indices
+        };
+
+        let partial_assignments = var_sequence_partial_assignment(
+            var_sequence,
+            lhs_assignment,
+            &possible_start_indices,
+            possible_end_indices,
+        );
+
+        constituent_partial_assignments.push(partial_assignments);
+        var_sequence_start_idx = var_sequence_end_idx;
+
+        /*match &compressed_rhs[i] {
             CompressedRHS::VariableSequence(var_sequence) => {
                 // also need the variables after the last constant
                 if i == compressed_rhs.len() - 1 {
@@ -332,7 +414,7 @@ fn solutions_for_equation<'a>(
                 }
             }
             CompressedRHS::CombinedConstants(consts) => {
-                let indices = lhs_assignment.find(consts.as_str());
+                let indices = lhs_assignment.find(consts);
                 const_indices.push((consts.len(), indices));
                 let preceding_vars = &compressed_rhs[i - 1];
                 if let CompressedRHS::VariableSequence(preceding_var_sequence) = preceding_vars {
@@ -364,7 +446,7 @@ fn solutions_for_equation<'a>(
                     unreachable!()
                 }
             }
-        }
+        }*/
     }
 
     let combined_assignments = constituent_partial_assignments.into_iter().reduce(|a, b| {
@@ -385,26 +467,13 @@ fn solutions_for_equation<'a>(
         subs
     });
     if let Some(subs) = combined_assignments {
-        let satisfying_assignments = subs
-            .into_iter()
-            .filter(|sub| {
-                let applied_str = sub.apply(rhs).join("");
-                println!(
-                    "{}, {} | {}",
-                    applied_str,
-                    lhs_assignment.as_str(),
-                    applied_str == lhs_assignment.as_str()
-                );
-                return applied_str == lhs_assignment.as_str();
-            })
-            .collect_vec();
-        print_solutions(&satisfying_assignments, lhs_assignment.as_str());
-        todo!()
+        subs
     } else {
-        return vec![];
+        vec![]
     }
 }
 
+/// All assignments to a variable sequence across possible combinations of start/end indices
 fn var_sequence_partial_assignment<'a>(
     var_sequence: &'a [&str],
     lhs_assignment: &CharOperator<'a>,
