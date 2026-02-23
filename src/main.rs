@@ -204,7 +204,9 @@ impl<'a> Substitution<'a> {
                 return;
             }
         }
-        panic!("Failed to insert {}", var);
+        // if key not found, insert
+        self.keys.push(var);
+        self.values.push(value);
     }
 
     fn apply(&self, terms: &[EquationContent<'a>]) -> Vec<&'a str> {

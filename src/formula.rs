@@ -1,7 +1,7 @@
 use crate::strutils::CharOperator;
 use crate::{print_solutions, Substitution};
 use itertools::Itertools;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 pub const UNIVERSE_CONSTANT: &str = "$U";
 
@@ -159,12 +159,29 @@ impl<'a> Formula<'a> {
     pub fn all_solutions(&'a self, w: &'a CharOperator) -> Vec<Substitution<'a>> {
         match self {
             Formula::Equation { lhs, rhs } => {
-                // TODO - special case for $U
+                // TODO - special case for $U ?
+                // Ensure that the 'rhs' starts and ends with a variable
+                // We can use the prefix and suffix extracted here to do a quick check on potential
+                // assignments to the lhs variable
+                let (trimmed_rhs, required_prefix, required_suffix) = trim_equation_rhs(rhs);
                 let mut substitutions = Vec::new();
                 for lhs_value in w.generate_factors() {
-                    // solutions_for_equation(lhs_value, lhs, rhs);
-                    let lhs_chars = CharOperator::new(lhs);
-                    let lhs_factors = lhs_chars.generate_factors();
+                    if !lhs_value.starts_with(&required_prefix)
+                        || !lhs_value.ends_with(&required_suffix)
+                    {
+                        continue;
+                    }
+                    let trimmed_lhs_value =
+                        &lhs_value[required_prefix.len()..lhs_value.len() - required_suffix.len()];
+                    let assignments = solutions_for_equation(trimmed_lhs_value, lhs, trimmed_rhs);
+                    let assignments = assignments
+                        .into_iter()
+                        .map(|mut sub| {
+                            sub.insert(lhs, lhs_value);
+                            sub
+                        })
+                        .collect_vec();
+                    substitutions.extend(assignments);
                 }
                 substitutions
             }
@@ -205,152 +222,117 @@ impl<'a> Formula<'a> {
     }
 }
 
-enum CompressedRHS<'a> {
-    VariableSequence(Vec<&'a str>),
-    CombinedConstants(&'a str),
+fn trim_equation_rhs<'a, 'b>(
+    rhs: &'a [EquationContent<'b>],
+) -> (&'a [EquationContent<'b>], String, String) {
+    let mut trimmed_rhs = rhs;
+    let first = &trimmed_rhs[0];
+    let mut prefix = String::new();
+    if let EquationContent::Constant(val) = first {
+        trimmed_rhs = &trimmed_rhs[1..];
+        prefix = String::from(*val);
+    }
+
+    let last = &trimmed_rhs[trimmed_rhs.len() - 1];
+    let mut suffix = String::new();
+    if let EquationContent::Constant(val) = last {
+        trimmed_rhs = &trimmed_rhs[..trimmed_rhs.len() - 1];
+        suffix = String::from(*val);
+    }
+
+    if matches!(&trimmed_rhs[0], EquationContent::Constant(_))
+        || matches!(
+            &trimmed_rhs[trimmed_rhs.len() - 1],
+            EquationContent::Constant(_)
+        )
+    {
+        let (inner_trim, inner_prefix, inner_suffix) = trim_equation_rhs(trimmed_rhs);
+        trimmed_rhs = inner_trim;
+        prefix += &*inner_prefix;
+        suffix = inner_suffix + &*suffix;
+    }
+
+    (trimmed_rhs, prefix, suffix)
 }
 
-fn extract_vars<'a>(rhs: &'a [EquationContent]) -> Vec<&'a str> {
-    let mut vars = Vec::with_capacity(rhs.len());
-    for component in rhs {
-        if let EquationContent::Variable(var) = component {
-            vars.push(*var);
-        }
-    }
-    vars
+#[test]
+fn test_trim_equation_rhs() {
+    let rhs = [
+        EquationContent::Constant("aaa"),
+        EquationContent::Constant("bbb"),
+        EquationContent::Variable("x"),
+        EquationContent::Constant("middle"),
+        EquationContent::Variable("y"),
+        EquationContent::Constant("zz"),
+    ];
+    let (trimmed_rhs, prefix, suffix) = trim_equation_rhs(&rhs);
+    println!("{:?}", trimmed_rhs);
+    assert_eq!(prefix, "aaabbb");
+    assert_eq!(suffix, "zz");
+    assert_eq!(trimmed_rhs.len(), 3);
 }
 
 /// It is assumed that `rhs` starts and ends with a variable, otherwise the string `lhs_assignment`
 /// can be trimmed according to the surrounding constants on the rhs
 fn solutions_for_equation<'a>(
-    lhs_assignment: &'a CharOperator,
-    lhs_var: &str,
+    lhs_assignment: &'a str,
+    lhs_var: &'a str,
     rhs: &'a [EquationContent],
 ) -> Vec<Substitution<'a>> {
-    // string constants in the order in which they appear in the formula
-    let mut constants = Vec::new();
-    let mut const_positions = HashMap::new();
-    // let mut formula_vars = Vec::new();
-    for component in rhs {
-        match component {
-            EquationContent::Variable(var) => {
-                // formula_vars.push(*var);
-            }
-            EquationContent::Constant(val) => {
-                constants.push(*val);
-                let positions = lhs_assignment.find(val);
-                if positions.is_empty() {
-                    // lhs assignment doesn't contain a required constant in the equation rhs
-                    return vec![];
-                } else {
-                    const_positions.insert(*val, positions);
-                }
-            }
-        }
-    }
-
-    let mut compressed_rhs = Vec::new();
-    // TODO These loops can probably be combined
-    let mut variable_sequences: Vec<Vec<&str>> = Vec::new();
     let mut variable_sequences_end_indices = Vec::new();
-    let mut combined_constants = Vec::new();
-    let mut var_seq_idx = 0;
-    let mut var_counter = 0;
+    let mut constants = Vec::new();
+    let mut formula_vars = Vec::with_capacity(rhs.len());
     for component in rhs {
         match component {
             EquationContent::Variable(var) => {
-                if var_seq_idx >= variable_sequences.len() {
-                    variable_sequences.push(Vec::new());
-                }
-                var_counter += 1;
-                variable_sequences[var_seq_idx].push(var);
-
-                if compressed_rhs.is_empty() {
-                    compressed_rhs.push(CompressedRHS::VariableSequence(vec![var]));
-                } else {
-                    let last = compressed_rhs.last_mut().unwrap();
-                    match last {
-                        CompressedRHS::VariableSequence(vars) => vars.push(*var),
-                        CompressedRHS::CombinedConstants(_) => {
-                            compressed_rhs.push(CompressedRHS::VariableSequence(vec![var]))
-                        }
-                    }
-                }
+                formula_vars.push(*var);
             }
             EquationContent::Constant(val) => {
-                var_seq_idx += 1;
-                if !variable_sequences[variable_sequences.len() - 1].is_empty() {
-                    variable_sequences.push(Vec::new());
-                }
-                variable_sequences_end_indices.push(var_counter);
-
-                combined_constants.push(*val);
-
-                if compressed_rhs.is_empty() {
-                    compressed_rhs.push(CompressedRHS::CombinedConstants(val));
-                } else {
-                    let last = compressed_rhs.last_mut().unwrap();
-                    match last {
-                        CompressedRHS::VariableSequence(_) => {
-                            compressed_rhs.push(CompressedRHS::CombinedConstants(val))
-                        }
-                        CompressedRHS::CombinedConstants(_) => {
-                            todo!("Handling of combining constants")
-                        }
-                    }
-                }
+                variable_sequences_end_indices.push(formula_vars.len());
+                constants.push(*val);
             }
         }
     }
-    let formula_vars = extract_vars(rhs);
     variable_sequences_end_indices.push(formula_vars.len());
 
     // Case: no constants on rhs
     if constants.is_empty() {
         // all possible 'partition' assignments to rhs vars are satisfying, unless a variable appears multiple times
         let assignments =
-            equation_subsequence_solutions(&formula_vars, lhs_assignment.as_str()).collect_vec();
+            equation_subsequence_solutions(&formula_vars, lhs_assignment).collect_vec();
+        return assignments;
     }
 
-    // compressed rhs will alternate between a constant (or constant concatenation), and a sequence of variables
-    // starting and ending with a variable sequence
-    // let mut const_indices = Vec::with_capacity(constants.len());
-
-    /*let mut constituent_partial_assignments = Vec::new();
-    let len = compressed_rhs.len();
-    for i in 0..len {
-
-    }*/
     let combined_assignments = equation_assignments(
         &formula_vars,
         &variable_sequences_end_indices,
-        &combined_constants,
+        &constants,
         lhs_assignment,
     );
     let satisfying_assignments = combined_assignments
         .into_iter()
         .filter(|sub| {
             let applied_str = sub.apply(rhs).join("");
-            applied_str == lhs_assignment.as_str()
+            applied_str == lhs_assignment
         })
         .collect_vec();
-    print_solutions(&satisfying_assignments, lhs_assignment.as_str());
-    return satisfying_assignments;
-    todo!()
+    print_solutions(&satisfying_assignments, lhs_assignment);
+    satisfying_assignments
 }
 
 /// Returns assignments that satisfy the equation formed by taking the first variable sequence in
-/// `variable_sequences`, then the first constant in `combined_constants`, and so on, alternating.
-/// Starts and ends with a variable.
+/// defined by `variables` and end indices in `variable_sequence_indices`, then the first constant
+/// in `combined_constants`, and so on, alternating. Assumes pattern starts and ends with a variable
 fn equation_assignments<'a>(
     variables: &[&'a str],
     variable_sequence_indices: &[usize],
     constants: &Vec<&str>,
-    lhs_assignment: &CharOperator<'a>,
+    lhs_assignment: &'a str,
 ) -> Vec<Substitution<'a>> {
     let mut const_positions = Vec::with_capacity(constants.len());
+    let lhs_chars = CharOperator::new(lhs_assignment);
     for constant in constants {
-        let positions = lhs_assignment.find(constant);
+        let positions = lhs_chars.find(constant);
         const_positions.push((constant.len(), positions));
     }
 
@@ -374,7 +356,7 @@ fn equation_assignments<'a>(
 
         let partial_assignments = var_sequence_partial_assignment(
             var_sequence,
-            lhs_assignment,
+            &lhs_chars,
             &possible_start_indices,
             possible_end_indices,
         );
@@ -400,11 +382,7 @@ fn equation_assignments<'a>(
         }
         subs
     });
-    if let Some(subs) = combined_assignments {
-        subs
-    } else {
-        vec![]
-    }
+    combined_assignments.unwrap_or_default()
 }
 
 /// All assignments to a variable sequence across possible combinations of start/end indices
@@ -459,7 +437,7 @@ fn equation_subsequence_solutions<'a>(
 
 #[test]
 fn test_new_eq_solver() {
-    let lhs_assignment = CharOperator::new("abcdeafa");
+    let lhs_assignment = "abcdeafa";
     let sols = solutions_for_equation(
         &lhs_assignment,
         "x",
@@ -471,9 +449,9 @@ fn test_new_eq_solver() {
             EquationContent::Variable("s"),
         ],
     );
-    print_solutions(&sols, lhs_assignment.as_str());
+    print_solutions(&sols, lhs_assignment);
 
-    let lhs_assignment = CharOperator::new("cdababe");
+    let lhs_assignment = "cdababe";
     let sols = solutions_for_equation(
         &lhs_assignment,
         "q",
@@ -486,7 +464,7 @@ fn test_new_eq_solver() {
             EquationContent::Variable("u"),
         ],
     );
-    print_solutions(&sols, lhs_assignment.as_str());
+    print_solutions(&sols, lhs_assignment);
 }
 
 fn partition_string<'a>(string: &CharOperator<'a>, num_vars: usize) -> Vec<Vec<&'a str>> {
@@ -504,209 +482,4 @@ fn partition_string<'a>(string: &CharOperator<'a>, num_vars: usize) -> Vec<Vec<&
         substitutions.push(sub);
     }
     substitutions
-}
-
-#[test]
-fn test_partitions() {
-    let s = CharOperator::new("abcde");
-    let n = 3;
-    let partitions = partition_string(&s, n);
-    println!("{:?}", partitions);
-    assert_eq!(partitions.len(), 21);
-}
-
-fn rhs_assignments<'a>(
-    lhs_value: &'a str,
-    lhs_var: &'a str,
-    rhs: &Vec<EquationContent<'a>>,
-    formula: &'a Formula<'_>,
-) -> Vec<Substitution<'a>> {
-    let lhs_chars = CharOperator::new(lhs_value);
-
-    // TODO - filter out duplicates.... somehow
-    // TODO - filter out obvious fails as consts must be in sequence
-    let mut pattern_positions = Vec::with_capacity(rhs.len());
-    for p in rhs.iter() {
-        match p {
-            EquationContent::Variable(_) => {
-                pattern_positions.push(PatternPositions::Variable(None))
-            }
-            EquationContent::Constant(val) => {
-                let const_positions = lhs_chars.find(val);
-                if const_positions.is_empty() {
-                    // required const not found
-                    return vec![];
-                }
-
-                let const_positions = const_positions
-                    .into_iter()
-                    .map(|i| (i, i + val.len()))
-                    .collect_vec();
-                pattern_positions.push(PatternPositions::Constant(const_positions));
-            }
-        }
-    }
-
-    let start_position = LookBehind::Constant(vec![(0, 0)]);
-    let end_position = vec![(lhs_chars.len(), lhs_chars.len())];
-    for i in 0..rhs.len() {
-        let is_start = i == 0;
-        let is_final = i == rhs.len() - 1;
-        // Look ahead and look behind are either a single const, or a group of variables until the next const.
-
-        // look behind
-        let mut look_behinds = Vec::with_capacity(i);
-        if is_start {
-            look_behinds.push(start_position.clone());
-        } else {
-            let mut prev = &pattern_positions[i - 1];
-            match &prev {
-                PatternPositions::Variable(_) => {
-                    let mut is_var = true;
-                    let mut j = 1;
-                    while is_var {
-                        match prev {
-                            PatternPositions::Variable(_) => {
-                                if j > i {
-                                    break;
-                                }
-                                let prev_look_behind = LookBehind::Variables(vec![]);
-                                look_behinds.push(prev_look_behind);
-                                prev = &pattern_positions[i - j];
-                                j += 1;
-                            }
-                            PatternPositions::Constant(_) => {
-                                is_var = false;
-                            }
-                        }
-                    }
-                }
-                PatternPositions::Constant(c) => {
-                    let c = LookBehind::Constant(c.clone());
-                    look_behinds.push(c);
-                }
-            }
-        }
-
-        // look ahead
-        let mut look_ahead = None;
-        if is_final {
-            look_ahead = Some(&end_position);
-        } else {
-            let next = &pattern_positions[i + 1];
-            match &next {
-                PatternPositions::Variable(_) => {}
-                PatternPositions::Constant(positions) => {
-                    look_ahead = Some(positions);
-                }
-            }
-        }
-        let pattern_element = &rhs[i];
-
-        match pattern_element {
-            EquationContent::Variable(_) => {
-                let mut positions = Vec::new();
-                // lookbehind (i,j) - _j_ is possible start location
-                // lookahead (i,j) - _i_ is possible end location
-                for b in look_behinds {
-                    match b {
-                        LookBehind::Variables(_) => {
-                            todo!()
-                        }
-                        LookBehind::Constant(val_positions) => {
-                            for (_, j) in val_positions {
-                                for &a in look_ahead.iter() {
-                                    for (i, _) in a {
-                                        positions.push((j, *i));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                pattern_positions[i] = PatternPositions::Variable(Some(positions))
-            }
-            EquationContent::Constant(_) => {}
-        }
-    }
-
-    let pattern_positions = pattern_positions.iter().map(|p| match p {
-        PatternPositions::Variable(var) => match var {
-            None => {
-                panic!()
-            }
-            Some(var_positions) => var_positions
-                .iter()
-                .filter(|(i, j)| i <= j)
-                .map(|(i, j)| lhs_chars.substring(*i, *j))
-                .collect_vec(),
-        },
-        PatternPositions::Constant(vals) => vals
-            .iter()
-            .map(|(i, j)| lhs_chars.substring(*i, *j))
-            .collect_vec(),
-    });
-
-    let position_combinations = pattern_positions.multi_cartesian_product();
-    let mut substitutions = Vec::with_capacity(position_combinations.try_len().unwrap());
-    let mut combo_set = HashSet::new();
-    for combination in position_combinations {
-        // This is naive duplicate filter
-        if combo_set.contains(&combination) {
-            continue;
-        }
-        combo_set.insert(combination.clone());
-
-        let free_vars = formula.free_vars();
-        let mut sub = Substitution::from_vars(&formula.free_vars(), "");
-        // TODO?
-        // sub.insert(UNIVERSE_CONSTANT, "");
-
-        sub.insert(lhs_var, lhs_value);
-        for (i, pattern_element) in rhs.iter().enumerate() {
-            let assignment = combination[i];
-            match pattern_element {
-                EquationContent::Variable(var) => {
-                    sub.insert(var, assignment);
-                }
-                EquationContent::Constant(val) => {
-                    assert_eq!(*val, assignment)
-                }
-            }
-        }
-        if formula.check_substitution(&lhs_chars, &sub) {
-            substitutions.push(sub);
-        }
-    }
-
-    substitutions
-}
-
-enum PatternPositions {
-    Variable(Option<Vec<(usize, usize)>>),
-    Constant(Vec<(usize, usize)>),
-}
-
-#[derive(Clone)]
-enum LookBehind {
-    Variables(Vec<Vec<(usize, usize)>>),
-    Constant(Vec<(usize, usize)>),
-}
-
-#[test]
-fn test_new_method() {
-    let eq = Formula::Equation {
-        lhs: "x",
-        rhs: vec![
-            EquationContent::Variable("y"),
-            EquationContent::Constant("a"),
-            EquationContent::Variable("z"),
-            EquationContent::Constant("b"),
-            EquationContent::Variable("q"),
-        ],
-    };
-    let w = CharOperator::new("bbabab");
-    let sols = eq.all_solutions(&w);
-    print_solutions(&sols, "bbabab");
 }
