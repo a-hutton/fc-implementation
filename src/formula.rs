@@ -172,24 +172,6 @@ impl<'a> Formula<'a> {
                     }
                     solutions_for_equation(w.as_str(), lhs, trimmed_rhs)
                 } else {
-                    // Case: RHS contains only constants
-                    let mut rhs_only_constants = true;
-                    for p in rhs {
-                        if matches!(p, EquationContent::Variable(_)) {
-                            rhs_only_constants = false;
-                        }
-                    }
-                    if rhs_only_constants {
-                        // there is only one solution
-                        let val = &rhs[0];
-                        if let EquationContent::Constant(val) = val {
-                            let mut sub = Substitution::from_vars(&[lhs], w.as_str());
-                            sub.insert(lhs, val);
-                            return vec![sub];
-                        };
-                        // TODO Case: lhs is variable, rhs is multiple constants
-                    }
-
                     let mut substitutions = Vec::new();
                     for lhs_value in w.generate_factors() {
                         if !lhs_value.starts_with(&required_prefix)
