@@ -196,7 +196,7 @@ impl<'a> Formula<'a> {
                     substitutions
                 }
             }
-            Formula::Negation { inner } => {
+            Formula::Negation { inner: _inner } => {
                 todo!()
             }
             Formula::Conjunction { fragments } => {
@@ -223,9 +223,9 @@ impl<'a> Formula<'a> {
                 satisfying_assignment.into_iter().collect_vec()
             }
             Formula::Quantifier {
-                var,
+                var: _,
                 quantifier: _quantifier,
-                inner,
+                inner: _,
             } => {
                 todo!()
             }

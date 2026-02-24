@@ -347,25 +347,3 @@ impl<'a> Substitution<'a> {
         new_terms
     }
 }
-/// Constructs all possible assignments from a universe of factors of the universe constant `w`
-/// to a given list of variables. Works by brute force over the Cartesian product repeated _n_ times
-/// for _n_ variables
-fn all_possible_substitutions<'a>(
-    var_names: Vec<&'a str>,
-    w: &'a str,
-    universe: &[&'a str],
-) -> impl Iterator<Item = Substitution<'a>> {
-    let var_vals_iter = std::iter::repeat_n(universe, var_names.len());
-    let mut subs_iter = var_vals_iter.multi_cartesian_product();
-    std::iter::from_fn(move || {
-        if let Some(sub_vals) = subs_iter.next() {
-            let mut sub = Substitution::from_vars(&var_names, w);
-            for i in 0..sub_vals.len() {
-                sub.values.push(sub_vals[i]);
-            }
-            Some(sub)
-        } else {
-            None
-        }
-    })
-}
