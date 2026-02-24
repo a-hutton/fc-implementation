@@ -339,7 +339,6 @@ fn solutions_for_equation<'a>(
             applied_str == lhs_assignment
         })
         .collect_vec();
-    print_solutions(&satisfying_assignments, lhs_assignment);
     satisfying_assignments
 }
 
