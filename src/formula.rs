@@ -164,26 +164,55 @@ impl<'a> Formula<'a> {
                 // We can use the prefix and suffix extracted here to do a quick check on potential
                 // assignments to the lhs variable
                 let (trimmed_rhs, required_prefix, required_suffix) = trim_equation_rhs(rhs);
-                let mut substitutions = Vec::new();
-                for lhs_value in w.generate_factors() {
-                    if !lhs_value.starts_with(&required_prefix)
-                        || !lhs_value.ends_with(&required_suffix)
+                if *lhs == UNIVERSE_CONSTANT {
+                    if !w.as_str().starts_with(&required_prefix)
+                        || !w.as_str().ends_with(&required_suffix)
                     {
-                        continue;
+                        return vec![];
                     }
-                    let trimmed_lhs_value =
-                        &lhs_value[required_prefix.len()..lhs_value.len() - required_suffix.len()];
-                    let assignments = solutions_for_equation(trimmed_lhs_value, lhs, trimmed_rhs);
-                    let assignments = assignments
-                        .into_iter()
-                        .map(|mut sub| {
-                            sub.insert(lhs, lhs_value);
-                            sub
-                        })
-                        .collect_vec();
-                    substitutions.extend(assignments);
+                    solutions_for_equation(w.as_str(), lhs, trimmed_rhs)
+                } else {
+                    // Case: RHS contains only constants
+                    let mut rhs_only_constants = true;
+                    for p in rhs {
+                        if matches!(p, EquationContent::Variable(_)) {
+                            rhs_only_constants = false;
+                        }
+                    }
+                    if rhs_only_constants {
+                        // there is only one solution
+                        let val = &rhs[0];
+                        if let EquationContent::Constant(val) = val {
+                            let mut sub = Substitution::from_vars(&[lhs], w.as_str());
+                            sub.insert(lhs, val);
+                            return vec![sub];
+                        };
+                        // TODO Case: lhs is variable, rhs is multiple constants
+                    }
+
+                    let mut substitutions = Vec::new();
+                    for lhs_value in w.generate_factors() {
+                        if !lhs_value.starts_with(&required_prefix)
+                            || !lhs_value.ends_with(&required_suffix)
+                        {
+                            continue;
+                        }
+                        let trimmed_lhs_value = &lhs_value
+                            [required_prefix.len()..lhs_value.len() - required_suffix.len()];
+                        let assignments =
+                            solutions_for_equation(trimmed_lhs_value, lhs, trimmed_rhs);
+                        let assignments = assignments
+                            .into_iter()
+                            .map(|mut sub| {
+                                sub.insert(lhs, lhs_value);
+                                sub
+                            })
+                            .filter(|sub| sub.apply(rhs).join("") == lhs_value)
+                            .collect_vec();
+                        substitutions.extend(assignments);
+                    }
+                    substitutions
                 }
-                substitutions
             }
             Formula::Negation { inner } => {
                 todo!()
@@ -232,12 +261,18 @@ fn trim_equation_rhs<'a, 'b>(
         trimmed_rhs = &trimmed_rhs[1..];
         prefix = String::from(*val);
     }
+    if trimmed_rhs.is_empty() {
+        return (trimmed_rhs, prefix, String::new());
+    }
 
     let last = &trimmed_rhs[trimmed_rhs.len() - 1];
     let mut suffix = String::new();
     if let EquationContent::Constant(val) = last {
         trimmed_rhs = &trimmed_rhs[..trimmed_rhs.len() - 1];
         suffix = String::from(*val);
+    }
+    if trimmed_rhs.is_empty() {
+        return (trimmed_rhs, prefix, String::new());
     }
 
     if matches!(&trimmed_rhs[0], EquationContent::Constant(_))
@@ -294,6 +329,12 @@ fn solutions_for_equation<'a>(
         }
     }
     variable_sequences_end_indices.push(formula_vars.len());
+
+    // Case: no variables on rhs (hit when lhs is universe constant)
+    if formula_vars.is_empty() {
+        // Not an empty 'set' of assignments, the set containing an empty assignment
+        return vec![Substitution::from_vars(&[], lhs_assignment)];
+    }
 
     // Case: no constants on rhs
     if constants.is_empty() {
