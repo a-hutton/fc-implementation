@@ -159,7 +159,6 @@ impl<'a> Formula<'a> {
     pub fn all_solutions(&'a self, w: &'a CharOperator) -> Vec<Substitution<'a>> {
         match self {
             Formula::Equation { lhs, rhs } => {
-                // TODO - special case for $U ?
                 // Ensure that the 'rhs' starts and ends with a variable
                 // We can use the prefix and suffix extracted here to do a quick check on potential
                 // assignments to the lhs variable
@@ -200,17 +199,18 @@ impl<'a> Formula<'a> {
                 todo!()
             }
             Formula::Conjunction { fragments } => {
-                let mut satisfying_assignments = fragments[0].all_solutions(w);
-                let mut i = 0;
-                while i < satisfying_assignments.len() {
-                    for fragment in &fragments[1..] {
-                        if !fragment.check_substitution(w, &satisfying_assignments[i]) {
-                            satisfying_assignments.swap_remove(i);
+                let first_assignments = fragments[0].all_solutions(w);
+                first_assignments
+                    .into_iter()
+                    .filter(|sub| {
+                        for fragment in &fragments[1..] {
+                            if !fragment.check_substitution(w, sub) {
+                                return false;
+                            }
                         }
-                    }
-                    i += 1;
-                }
-                satisfying_assignments
+                        true
+                    })
+                    .collect_vec()
             }
             Formula::Disjunction { fragments } => {
                 let mut satisfying_assignment = HashSet::new();
