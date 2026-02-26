@@ -111,6 +111,12 @@ fn test_conjunction() {
             num_solutions: 4,
         },
         SolutionTestCase {
+            formula: r#"x = "aabb" && y = x "a""#,
+            universe: "bbaabbabb",
+            should_fail: false,
+            num_solutions: 1,
+        },
+        SolutionTestCase {
             formula: r#"($U=x y && (x="a" && y=x))"#,
             universe: "aa",
             should_fail: false,
@@ -208,7 +214,10 @@ fn test_negation() {
 
 fn test_case_runner(cases: &[SolutionTestCase]) {
     for test in cases {
-        println!("Finding solutions for '{}'", test.formula);
+        println!(
+            "Finding solutions for '{}' on universe '{}'",
+            test.formula, test.universe
+        );
         let res = parse_formula_str(test.formula);
         match res {
             None => assert!(test.should_fail),
