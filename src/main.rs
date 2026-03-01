@@ -230,7 +230,7 @@ fn generate_factors(w: &str) -> Vec<&str> {
 
 /// Represents a substitution (σ in the literature). An assignment mapping variable names to values
 /// from the universe
-#[derive(Eq, PartialEq, Hash, Debug)]
+#[derive(Eq, PartialEq, Hash, Debug, Clone)]
 struct Substitution<'a> {
     keys: Vec<&'a str>,
     values: Vec<&'a str>,
@@ -345,5 +345,21 @@ impl<'a> Substitution<'a> {
             }
         }
         new_terms
+    }
+
+    fn extend_with_universe(
+        substitution: &Substitution<'a>,
+        vars: &[&'a str],
+        universe: &[&'a str],
+    ) -> Vec<Substitution<'a>> {
+        let mut subs = Vec::with_capacity(universe.len() * vars.len());
+        for &var in vars {
+            for &val in universe {
+                let mut new_sub = substitution.clone();
+                new_sub.insert(var, val);
+                subs.push(new_sub);
+            }
+        }
+        subs
     }
 }

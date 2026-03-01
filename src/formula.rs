@@ -200,17 +200,54 @@ impl<'a> Formula<'a> {
             }
             Formula::Conjunction { fragments } => {
                 let first_assignments = fragments[0].all_solutions(w);
-                first_assignments
-                    .into_iter()
-                    .filter(|sub| {
-                        for fragment in &fragments[1..] {
-                            if !fragment.check_substitution(w, sub) {
-                                return false;
-                            }
+
+                // Find the variables that appear in fragments[1..], but not fragments[0]
+                let first_fragment_vars = fragments[0].free_vars();
+                let mut unseen_vars = HashSet::new();
+                for fragment in &fragments[1..] {
+                    let fragment_vars = fragment.free_vars();
+                    for var in fragment_vars {
+                        if !first_fragment_vars.contains(&var) {
+                            unseen_vars.insert(var);
                         }
-                        true
-                    })
-                    .collect_vec()
+                    }
+                }
+                let unseen_vars = unseen_vars.into_iter().collect_vec();
+                let universe = w.generate_factors();
+
+                if unseen_vars.is_empty() {
+                    first_assignments
+                        .into_iter()
+                        .filter(|sub| {
+                            for fragment in &fragments[1..] {
+                                if !fragment.check_substitution(w, sub) {
+                                    return false;
+                                }
+                            }
+                            true
+                        })
+                        .collect_vec()
+                } else {
+                    let mut satisfying_assignments = Vec::new();
+                    for sub in &first_assignments {
+                        let modified_subs =
+                            Substitution::extend_with_universe(sub, &unseen_vars, &universe);
+
+                        let satisfying_modded_subs = modified_subs
+                            .into_iter()
+                            .filter(|sub| {
+                                for fragment in &fragments[1..] {
+                                    if !fragment.check_substitution(w, sub) {
+                                        return false;
+                                    }
+                                }
+                                true
+                            })
+                            .collect_vec();
+                        satisfying_assignments.extend(satisfying_modded_subs);
+                    }
+                    satisfying_assignments
+                }
             }
             Formula::Disjunction { fragments } => {
                 let mut satisfying_assignment = HashSet::new();
