@@ -342,6 +342,9 @@ impl<'a> Substitution<'a> {
                 EquationContent::Constant(c) => {
                     new_terms.push(*c);
                 }
+                EquationContent::UniverseConstant => {
+                    new_terms.push(self.universe_constant);
+                }
             }
         }
         new_terms

@@ -11,6 +11,7 @@ pub const UNIVERSE_CONSTANT: &str = "$U";
 pub enum EquationContent<'a> {
     Variable(&'a str),
     Constant(&'a str),
+    UniverseConstant,
 }
 
 #[derive(Debug)]
@@ -169,7 +170,9 @@ impl<'a> Formula<'a> {
                     {
                         return vec![];
                     }
-                    solutions_for_equation(w.as_str(), lhs, trimmed_rhs)
+                    let trimmed_universe = &w.as_str()
+                        [required_prefix.len()..w.as_str().len() - required_suffix.len()];
+                    solutions_for_equation(trimmed_universe, trimmed_rhs, w.as_str())
                 } else {
                     let mut substitutions = Vec::new();
                     for lhs_value in w.generate_factors() {
@@ -181,7 +184,7 @@ impl<'a> Formula<'a> {
                         let trimmed_lhs_value = &lhs_value
                             [required_prefix.len()..lhs_value.len() - required_suffix.len()];
                         let assignments =
-                            solutions_for_equation(trimmed_lhs_value, lhs, trimmed_rhs);
+                            solutions_for_equation(trimmed_lhs_value, trimmed_rhs, w.as_str());
                         let assignments = assignments
                             .into_iter()
                             .map(|mut sub| {
@@ -330,8 +333,8 @@ fn test_trim_equation_rhs() {
 /// can be trimmed according to the surrounding constants on the rhs
 fn solutions_for_equation<'a>(
     lhs_assignment: &'a str,
-    lhs_var: &'a str,
     rhs: &'a [EquationContent],
+    universe_word: &'a str,
 ) -> Vec<Substitution<'a>> {
     let mut variable_sequences_end_indices = Vec::new();
     let mut constants = Vec::new();
@@ -344,6 +347,9 @@ fn solutions_for_equation<'a>(
             EquationContent::Constant(val) => {
                 variable_sequences_end_indices.push(formula_vars.len());
                 constants.push(*val);
+            }
+            EquationContent::UniverseConstant => {
+                constants.push(universe_word);
             }
         }
     }
@@ -359,7 +365,8 @@ fn solutions_for_equation<'a>(
     if constants.is_empty() {
         // all possible 'partition' assignments to rhs vars are satisfying, unless a variable appears multiple times
         let assignments =
-            equation_subsequence_solutions(&formula_vars, lhs_assignment).collect_vec();
+            equation_subsequence_solutions(&formula_vars, lhs_assignment, universe_word)
+                .collect_vec();
         return assignments;
     }
 
@@ -368,6 +375,7 @@ fn solutions_for_equation<'a>(
         &variable_sequences_end_indices,
         &constants,
         lhs_assignment,
+        universe_word,
     );
     let satisfying_assignments = combined_assignments
         .into_iter()
@@ -387,6 +395,7 @@ fn equation_assignments<'a>(
     variable_sequence_indices: &[usize],
     constants: &Vec<&str>,
     lhs_assignment: &'a str,
+    universe_word: &'a str,
 ) -> Vec<Substitution<'a>> {
     let mut const_positions = Vec::with_capacity(constants.len());
     let lhs_chars = CharOperator::new(lhs_assignment);
@@ -418,6 +427,7 @@ fn equation_assignments<'a>(
             &lhs_chars,
             &possible_start_indices,
             possible_end_indices,
+            universe_word,
         );
 
         constituent_partial_assignments.push(partial_assignments);
@@ -450,6 +460,7 @@ fn var_sequence_partial_assignment<'a>(
     lhs_assignment: &CharOperator<'a>,
     possible_start_indices: &Vec<usize>,
     possible_end_indices: &Vec<usize>,
+    universe_word: &'a str,
 ) -> Vec<Substitution<'a>> {
     let mut partial_assignments = Vec::new();
     for &start in possible_start_indices {
@@ -457,7 +468,8 @@ fn var_sequence_partial_assignment<'a>(
             if start <= end {
                 let target_substring = lhs_assignment.substring(start, end);
                 let substitutions =
-                    equation_subsequence_solutions(var_sequence, target_substring).collect_vec();
+                    equation_subsequence_solutions(var_sequence, target_substring, universe_word)
+                        .collect_vec();
                 partial_assignments.extend(substitutions);
             }
         }
@@ -469,6 +481,7 @@ fn var_sequence_partial_assignment<'a>(
 fn equation_subsequence_solutions<'a>(
     var_sequence: &[&'a str],
     lhs_substring: &'a str,
+    universe_word: &'a str,
 ) -> impl Iterator<Item = Substitution<'a>> {
     let lhs_chars = CharOperator::new(lhs_substring);
     let mut partitioned_values = partition_string(&lhs_chars, var_sequence.len()).into_iter();
@@ -476,7 +489,7 @@ fn equation_subsequence_solutions<'a>(
         loop {
             let values = partitioned_values.next();
             if let Some(values) = values {
-                let mut substitution = Substitution::from_vars(var_sequence, lhs_substring);
+                let mut substitution = Substitution::from_vars(var_sequence, universe_word);
                 for i in 0..values.len() {
                     substitution.insert(var_sequence[i], values[i]);
                 }
@@ -499,7 +512,6 @@ fn test_new_eq_solver() {
     let lhs_assignment = "abcdeafa";
     let sols = solutions_for_equation(
         &lhs_assignment,
-        "x",
         &[
             EquationContent::Variable("q"),
             EquationContent::Variable("w"),
@@ -507,13 +519,13 @@ fn test_new_eq_solver() {
             EquationContent::Constant("a"),
             EquationContent::Variable("s"),
         ],
+        "",
     );
     print_solutions(&sols, lhs_assignment);
 
     let lhs_assignment = "cdababe";
     let sols = solutions_for_equation(
         &lhs_assignment,
-        "q",
         &[
             EquationContent::Variable("r"),
             EquationContent::Constant("a"),
@@ -522,6 +534,7 @@ fn test_new_eq_solver() {
             EquationContent::Constant("b"),
             EquationContent::Variable("u"),
         ],
+        "",
     );
     print_solutions(&sols, lhs_assignment);
 }

@@ -1,4 +1,4 @@
-use crate::formula::{EquationContent, Formula, Quantifier};
+use crate::formula::{EquationContent, Formula, Quantifier, UNIVERSE_CONSTANT};
 use pest::iterators::{Pair, Pairs};
 use pest::Parser;
 
@@ -76,7 +76,14 @@ fn parse_equation<'a>(eq: &mut Pairs<'a, Rule>) -> Formula<'a> {
                 // remove " at start and end
                 EquationContent::Constant(str[1..str.len() - 1].into())
             }
-            Rule::variable => EquationContent::Variable(x.as_str()),
+            Rule::variable => {
+                let name = x.as_str();
+                if name == UNIVERSE_CONSTANT {
+                    EquationContent::UniverseConstant
+                } else {
+                    EquationContent::Variable(name)
+                }
+            }
             _ => panic!("Unreachable state"),
         })
         .collect();

@@ -146,6 +146,12 @@ fn test_conjunction() {
             should_fail: false,
             num_solutions: 0,
         },
+        SolutionTestCase {
+            formula: r#"$U="b" x"#,
+            universe: "baa",
+            should_fail: false,
+            num_solutions: 1,
+        },
         // variables with names in alphabet
         SolutionTestCase {
             formula: r#"(a="b"b && b="a")"#,
