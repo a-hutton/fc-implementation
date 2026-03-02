@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate::formula_parser::parse_formula_str;
-use crate::strutils::CharOperator;
+use crate::strutils::{unicode_normalise, CharOperator};
 use crate::{find_solutions, print_solutions};
 use std::time::Instant;
 
@@ -228,7 +228,8 @@ fn test_case_runner(cases: &[SolutionTestCase]) {
         match res {
             None => assert!(test.should_fail),
             Some(formula) => {
-                let w = CharOperator::new(test.universe);
+                let normalised = unicode_normalise(test.universe);
+                let w = CharOperator::new(normalised.as_str());
                 let solutions = find_solutions(&formula, &w);
                 let len = print_solutions(&solutions, test.universe);
                 println!("Found {len} solutions");

@@ -1,5 +1,5 @@
-use crate::generate_factors;
 use itertools::Itertools;
+use unicode_normalization::UnicodeNormalization;
 
 pub struct CharOperator<'a> {
     string: &'a str,
@@ -119,8 +119,25 @@ impl<'a> CharOperator<'a> {
         self.string
     }
 
+    /// Constructs a list of all substrings of a given word. This assumes that the empty string is a
+    /// factor of all words
     pub fn generate_factors(&self) -> Vec<&str> {
-        generate_factors(self.string)
+        // maximum possible number of substrings: n(n+1)/2
+        let num_factors = self.len() * (self.len() + 1) / 2 + 1;
+        let mut factors = Vec::with_capacity(num_factors);
+        factors.push("");
+
+        // sliding window for each possible length of subword
+        for len in 1..self.len() {
+            for i in 0..(self.len() - len + 1) {
+                let substr = self.substring(i, i + len);
+                if !factors.contains(&substr) {
+                    factors.push(substr);
+                }
+            }
+        }
+        factors.push(self.as_str());
+        factors
     }
 }
 
@@ -139,4 +156,9 @@ fn test_chars_substring() {
 pub fn count_chars(string: &str) -> usize {
     let operator = CharOperator::new(string);
     operator.len
+}
+
+#[inline]
+pub fn unicode_normalise(string: &str) -> String {
+    string.nfc().collect()
 }

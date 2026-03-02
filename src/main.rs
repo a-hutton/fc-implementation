@@ -4,11 +4,9 @@ mod strutils;
 mod tests;
 
 use crate::formula::{EquationContent, Formula, UNIVERSE_CONSTANT};
-use crate::strutils::CharOperator;
+use crate::strutils::{unicode_normalise, CharOperator};
 use clap::Parser;
-use itertools::Itertools;
 use std::fs;
-use unicode_segmentation::UnicodeSegmentation;
 
 fn main() {
     let args = Args::parse();
@@ -23,7 +21,7 @@ fn main() {
     } else {
         args.text_option.text.unwrap()
     };
-
+    let text = unicode_normalise(&text);
     let text_chars = CharOperator::new(text.as_str());
 
     match args.command {
@@ -198,34 +196,6 @@ fn print_solutions(subs: &Vec<Substitution>, universe: &str) -> usize {
         count += 1;
     }
     count
-}
-
-/// Constructs a list of all substrings of a given word. This assumes that the empty string is a
-/// factor of all words
-fn generate_factors(w: &str) -> Vec<&str> {
-    // maximum possible number of substrings: n(n+1)/2
-    let num_factors = w.len() * (w.len() + 1) / 2 + 1;
-    let mut factors = Vec::with_capacity(num_factors);
-    factors.push("");
-
-    let unicode_chars = UnicodeSegmentation::graphemes(w, true).collect::<Vec<&str>>();
-
-    // sliding window for each possible length of subword
-    for len in 1..unicode_chars.len() {
-        for i in 0..(unicode_chars.len() - len + 1) {
-            let start_byte_offset = unicode_chars[..i].iter().map(|b| b.len()).sum::<usize>();
-            let end_byte_offset = unicode_chars[..i + len]
-                .iter()
-                .map(|b| b.len())
-                .sum::<usize>();
-            let substr = &w[start_byte_offset..end_byte_offset];
-            if !factors.contains(&substr) {
-                factors.push(substr);
-            }
-        }
-    }
-    factors.push(w);
-    factors
 }
 
 /// Represents a substitution (σ in the literature). An assignment mapping variable names to values
