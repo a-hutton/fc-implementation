@@ -191,11 +191,11 @@ impl<'a> Formula<'a> {
                         );
                         let assignments_for_lhs_value = assignments
                             .into_iter()
-                            .map(|mut sub| {
-                                sub.insert(lhs, lhs_value);
-                                sub
+                            .map(|mut assignment| {
+                                assignment.insert(lhs, lhs_value);
+                                assignment
                             })
-                            .filter(|sub| sub.apply(rhs).join("") == lhs_value)
+                            .filter(|assignment| assignment.apply(rhs).join("") == lhs_value)
                             .collect_vec();
                         all_assignments.extend(assignments_for_lhs_value);
                     }
@@ -225,9 +225,9 @@ impl<'a> Formula<'a> {
                 if unseen_vars.is_empty() {
                     first_assignments
                         .into_iter()
-                        .filter(|sub| {
+                        .filter(|assignment| {
                             for fragment in &fragments[1..] {
-                                if !fragment.is_satisfying_assignment(w, sub) {
+                                if !fragment.is_satisfying_assignment(w, assignment) {
                                     return false;
                                 }
                             }
@@ -236,22 +236,22 @@ impl<'a> Formula<'a> {
                         .collect_vec()
                 } else {
                     let mut satisfying_assignments = Vec::new();
-                    for sub in &first_assignments {
-                        let modified_subs =
-                            Assignment::extend_with_universe(sub, &unseen_vars, &universe);
+                    for assignment in &first_assignments {
+                        let modified_assignments =
+                            Assignment::extend_with_universe(assignment, &unseen_vars, &universe);
 
-                        let satisfying_modded_subs = modified_subs
+                        let satisfying_modified_assignments = modified_assignments
                             .into_iter()
-                            .filter(|sub| {
+                            .filter(|assignment| {
                                 for fragment in &fragments[1..] {
-                                    if !fragment.is_satisfying_assignment(w, sub) {
+                                    if !fragment.is_satisfying_assignment(w, assignment) {
                                         return false;
                                     }
                                 }
                                 true
                             })
                             .collect_vec();
-                        satisfying_assignments.extend(satisfying_modded_subs);
+                        satisfying_assignments.extend(satisfying_modified_assignments);
                     }
                     satisfying_assignments
                 }
@@ -383,8 +383,8 @@ fn partial_assignments_for_equation<'a>(
     );
     let satisfying_assignments = combined_assignments
         .into_iter()
-        .filter(|sub| {
-            let applied_str = sub.apply(rhs).join("");
+        .filter(|assignment| {
+            let applied_str = assignment.apply(rhs).join("");
             applied_str == lhs_assignment
         })
         .collect_vec();
@@ -439,12 +439,12 @@ fn equation_assignments<'a>(
     }
 
     let combined_assignments = constituent_partial_assignments.into_iter().reduce(|a, b| {
-        let mut subs = Vec::with_capacity(a.len() * b.len());
+        let mut assignments = Vec::with_capacity(a.len() * b.len());
         for assignment_a in &a {
             for assignment_b in &b {
                 let res = Assignment::join(assignment_a, assignment_b);
                 if let Ok(s) = res {
-                    subs.push(s);
+                    assignments.push(s);
                 } else {
                     println!(
                         "Didn't join assignments - conflicting values: {}",
@@ -453,7 +453,7 @@ fn equation_assignments<'a>(
                 }
             }
         }
-        subs
+        assignments
     });
     combined_assignments.unwrap_or_default()
 }
@@ -553,12 +553,12 @@ fn partition_string<'a>(string: &CharOperator<'a>, num_vars: usize) -> Vec<Vec<&
         let mut partition_position = partition_position;
         partition_position.insert(0, 0);
         partition_position.push(string.len());
-        let sub = if string.len() == 0 {
+        let values = if string.len() == 0 {
             vec![""; num_vars]
         } else {
             string.multi_substring(&partition_position)
         };
-        assignments.push(sub);
+        assignments.push(values);
     }
     assignments
 }

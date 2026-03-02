@@ -162,8 +162,8 @@ fn find_solutions<'a>(formula: &'a Formula, word: &'a CharOperator) -> Vec<Assig
 }
 
 /// Prints to stdout a pretty-printed CSV formatted table of all given assignments
-fn print_assignments(subs: &Vec<Assignment>, universe: &str) -> usize {
-    if subs.is_empty() {
+fn print_assignments(assignments: &Vec<Assignment>, universe: &str) -> usize {
+    if assignments.is_empty() {
         println!("No satisfying assignments found");
         return 0;
     }
@@ -171,7 +171,7 @@ fn print_assignments(subs: &Vec<Assignment>, universe: &str) -> usize {
     // guaranteed to be the longest variable, helps for printing as a 'table'
     let universe_len = strutils::count_chars(universe);
 
-    let var_names = &subs[0].keys;
+    let var_names = &assignments[0].keys;
     // print var names
     for (i, var_name) in var_names.iter().enumerate() {
         print!("{var:width$}", var = var_name, width = universe_len);
@@ -182,12 +182,12 @@ fn print_assignments(subs: &Vec<Assignment>, universe: &str) -> usize {
     println!();
 
     let mut count = 0;
-    for sub in subs {
-        for i in 0..sub.keys.len() {
-            let val = if sub.values[i].is_empty() {
+    for assignment in assignments {
+        for i in 0..assignment.keys.len() {
+            let val = if assignment.values[i].is_empty() {
                 "ε"
             } else {
-                sub.values[i]
+                assignment.values[i]
             };
             print!("{val:width$}", val = val, width = universe_len);
             if i < var_names.len() - 1 {

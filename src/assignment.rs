@@ -126,14 +126,14 @@ impl<'a> Assignment<'a> {
         vars: &[&'a str],
         universe: &[&'a str],
     ) -> Vec<Assignment<'a>> {
-        let mut subs = Vec::with_capacity(universe.len() * vars.len());
+        let mut assignments = Vec::with_capacity(universe.len() * vars.len());
         for &var in vars {
             for &val in universe {
-                let mut new_sub = assignment.clone();
-                new_sub.insert(var, val);
-                subs.push(new_sub);
+                let mut new_assignment = assignment.clone();
+                new_assignment.insert(var, val);
+                assignments.push(new_assignment);
             }
         }
-        subs
+        assignments
     }
 }
