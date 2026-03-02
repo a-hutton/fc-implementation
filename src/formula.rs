@@ -1,5 +1,6 @@
+use crate::assignment::Assignment;
+use crate::print_assignments;
 use crate::strutils::CharOperator;
-use crate::{print_solutions, Substitution};
 use itertools::Itertools;
 use std::collections::HashSet;
 
@@ -43,17 +44,17 @@ pub enum Formula<'a> {
 }
 
 impl<'a> Formula<'a> {
-    pub fn check_substitution(&self, w: &CharOperator, substitution: &Substitution) -> bool {
+    pub fn is_satisfying_assignment(&self, w: &CharOperator, assignment: &Assignment) -> bool {
         match self {
             Formula::Equation { lhs, rhs } => {
-                let lhs_value = substitution.value(lhs);
-                let rhs_value = substitution.apply(rhs).join("");
+                let lhs_value = assignment.value(lhs);
+                let rhs_value = assignment.apply(rhs).join("");
                 lhs_value == rhs_value
             }
-            Formula::Negation { inner } => !inner.check_substitution(w, substitution),
+            Formula::Negation { inner } => !inner.is_satisfying_assignment(w, assignment),
             Formula::Conjunction { fragments } => {
                 for fragment in fragments {
-                    if !fragment.check_substitution(w, substitution) {
+                    if !fragment.is_satisfying_assignment(w, assignment) {
                         return false;
                     }
                 }
@@ -61,7 +62,7 @@ impl<'a> Formula<'a> {
             }
             Formula::Disjunction { fragments } => {
                 for fragment in fragments {
-                    if fragment.check_substitution(w, substitution) {
+                    if fragment.is_satisfying_assignment(w, assignment) {
                         return true;
                     }
                 }
@@ -72,19 +73,19 @@ impl<'a> Formula<'a> {
                 var,
                 quantifier,
             } => {
-                let mut altered_substitution =
-                    Substitution::from_vars(&substitution.keys, substitution.universe_constant);
-                altered_substitution.keys.push(var);
-                for val in &substitution.values {
-                    altered_substitution.values.push(*val);
+                let mut altered_assignment =
+                    Assignment::from_vars(&assignment.keys, assignment.universe_constant);
+                altered_assignment.keys.push(var);
+                for val in &assignment.values {
+                    altered_assignment.values.push(*val);
                 }
-                altered_substitution.values.push("");
-                let last_idx = altered_substitution.values.len() - 1;
+                altered_assignment.values.push("");
+                let last_idx = altered_assignment.values.len() - 1;
                 match quantifier {
                     Quantifier::Universal => {
                         for factor in w.generate_factors() {
-                            altered_substitution.values[last_idx] = factor;
-                            let holds = inner.check_substitution(w, &altered_substitution);
+                            altered_assignment.values[last_idx] = factor;
+                            let holds = inner.is_satisfying_assignment(w, &altered_assignment);
                             if holds {
                                 return false;
                             }
@@ -93,8 +94,8 @@ impl<'a> Formula<'a> {
                     }
                     Quantifier::Existential => {
                         for factor in w.generate_factors() {
-                            altered_substitution.values[last_idx] = factor;
-                            let holds = inner.check_substitution(w, &altered_substitution);
+                            altered_assignment.values[last_idx] = factor;
+                            let holds = inner.is_satisfying_assignment(w, &altered_assignment);
                             if holds {
                                 return true;
                             }
@@ -157,7 +158,7 @@ impl<'a> Formula<'a> {
         }
     }
 
-    pub fn all_solutions(&'a self, w: &'a CharOperator) -> Vec<Substitution<'a>> {
+    pub fn all_solutions(&'a self, w: &'a CharOperator) -> Vec<Assignment<'a>> {
         match self {
             Formula::Equation { lhs, rhs } => {
                 // Ensure that the 'rhs' starts and ends with a variable
@@ -172,9 +173,9 @@ impl<'a> Formula<'a> {
                     }
                     let trimmed_universe = &w.as_str()
                         [required_prefix.len()..w.as_str().len() - required_suffix.len()];
-                    solutions_for_equation(trimmed_universe, trimmed_rhs, w.as_str())
+                    partial_assignments_for_equation(trimmed_universe, trimmed_rhs, w.as_str())
                 } else {
-                    let mut substitutions = Vec::new();
+                    let mut all_assignments = Vec::new();
                     for lhs_value in w.generate_factors() {
                         if !lhs_value.starts_with(&required_prefix)
                             || !lhs_value.ends_with(&required_suffix)
@@ -183,9 +184,12 @@ impl<'a> Formula<'a> {
                         }
                         let trimmed_lhs_value = &lhs_value
                             [required_prefix.len()..lhs_value.len() - required_suffix.len()];
-                        let assignments =
-                            solutions_for_equation(trimmed_lhs_value, trimmed_rhs, w.as_str());
-                        let assignments = assignments
+                        let assignments = partial_assignments_for_equation(
+                            trimmed_lhs_value,
+                            trimmed_rhs,
+                            w.as_str(),
+                        );
+                        let assignments_for_lhs_value = assignments
                             .into_iter()
                             .map(|mut sub| {
                                 sub.insert(lhs, lhs_value);
@@ -193,9 +197,9 @@ impl<'a> Formula<'a> {
                             })
                             .filter(|sub| sub.apply(rhs).join("") == lhs_value)
                             .collect_vec();
-                        substitutions.extend(assignments);
+                        all_assignments.extend(assignments_for_lhs_value);
                     }
-                    substitutions
+                    all_assignments
                 }
             }
             Formula::Negation { inner: _inner } => {
@@ -223,7 +227,7 @@ impl<'a> Formula<'a> {
                         .into_iter()
                         .filter(|sub| {
                             for fragment in &fragments[1..] {
-                                if !fragment.check_substitution(w, sub) {
+                                if !fragment.is_satisfying_assignment(w, sub) {
                                     return false;
                                 }
                             }
@@ -234,13 +238,13 @@ impl<'a> Formula<'a> {
                     let mut satisfying_assignments = Vec::new();
                     for sub in &first_assignments {
                         let modified_subs =
-                            Substitution::extend_with_universe(sub, &unseen_vars, &universe);
+                            Assignment::extend_with_universe(sub, &unseen_vars, &universe);
 
                         let satisfying_modded_subs = modified_subs
                             .into_iter()
                             .filter(|sub| {
                                 for fragment in &fragments[1..] {
-                                    if !fragment.check_substitution(w, sub) {
+                                    if !fragment.is_satisfying_assignment(w, sub) {
                                         return false;
                                     }
                                 }
@@ -331,11 +335,11 @@ fn test_trim_equation_rhs() {
 
 /// It is assumed that `rhs` starts and ends with a variable, otherwise the string `lhs_assignment`
 /// can be trimmed according to the surrounding constants on the rhs
-fn solutions_for_equation<'a>(
+fn partial_assignments_for_equation<'a>(
     lhs_assignment: &'a str,
     rhs: &'a [EquationContent],
     universe_word: &'a str,
-) -> Vec<Substitution<'a>> {
+) -> Vec<Assignment<'a>> {
     let mut variable_sequences_end_indices = Vec::new();
     let mut constants = Vec::new();
     let mut formula_vars = Vec::with_capacity(rhs.len());
@@ -358,14 +362,14 @@ fn solutions_for_equation<'a>(
     // Case: no variables on rhs (hit when lhs is universe constant)
     if formula_vars.is_empty() {
         // Not an empty 'set' of assignments, the set containing an empty assignment
-        return vec![Substitution::from_vars(&[], lhs_assignment)];
+        return vec![Assignment::from_vars(&[], lhs_assignment)];
     }
 
     // Case: no constants on rhs
     if constants.is_empty() {
         // all possible 'partition' assignments to rhs vars are satisfying, unless a variable appears multiple times
         let assignments =
-            equation_subsequence_solutions(&formula_vars, lhs_assignment, universe_word)
+            equation_subsequence_partial_assignments(&formula_vars, lhs_assignment, universe_word)
                 .collect_vec();
         return assignments;
     }
@@ -396,7 +400,7 @@ fn equation_assignments<'a>(
     constants: &Vec<&str>,
     lhs_assignment: &'a str,
     universe_word: &'a str,
-) -> Vec<Substitution<'a>> {
+) -> Vec<Assignment<'a>> {
     let mut const_positions = Vec::with_capacity(constants.len());
     let lhs_chars = CharOperator::new(lhs_assignment);
     for constant in constants {
@@ -438,7 +442,7 @@ fn equation_assignments<'a>(
         let mut subs = Vec::with_capacity(a.len() * b.len());
         for assignment_a in &a {
             for assignment_b in &b {
-                let res = Substitution::join(assignment_a, assignment_b);
+                let res = Assignment::join(assignment_a, assignment_b);
                 if let Ok(s) = res {
                     subs.push(s);
                 } else {
@@ -461,16 +465,19 @@ fn var_sequence_partial_assignment<'a>(
     possible_start_indices: &Vec<usize>,
     possible_end_indices: &Vec<usize>,
     universe_word: &'a str,
-) -> Vec<Substitution<'a>> {
+) -> Vec<Assignment<'a>> {
     let mut partial_assignments = Vec::new();
     for &start in possible_start_indices {
         for &end in possible_end_indices {
             if start <= end {
                 let target_substring = lhs_assignment.substring(start, end);
-                let substitutions =
-                    equation_subsequence_solutions(var_sequence, target_substring, universe_word)
-                        .collect_vec();
-                partial_assignments.extend(substitutions);
+                let assignments = equation_subsequence_partial_assignments(
+                    var_sequence,
+                    target_substring,
+                    universe_word,
+                )
+                .collect_vec();
+                partial_assignments.extend(assignments);
             }
         }
     }
@@ -478,27 +485,27 @@ fn var_sequence_partial_assignment<'a>(
 }
 
 /// Finds partial assignments for the variables in `var_sequence` to make the substring
-fn equation_subsequence_solutions<'a>(
+fn equation_subsequence_partial_assignments<'a>(
     var_sequence: &[&'a str],
     lhs_substring: &'a str,
     universe_word: &'a str,
-) -> impl Iterator<Item = Substitution<'a>> {
+) -> impl Iterator<Item = Assignment<'a>> {
     let lhs_chars = CharOperator::new(lhs_substring);
     let mut partitioned_values = partition_string(&lhs_chars, var_sequence.len()).into_iter();
     std::iter::from_fn(move || {
         loop {
             let values = partitioned_values.next();
             if let Some(values) = values {
-                let mut substitution = Substitution::from_vars(var_sequence, universe_word);
+                let mut assignment = Assignment::from_vars(var_sequence, universe_word);
                 for i in 0..values.len() {
-                    substitution.insert(var_sequence[i], values[i]);
+                    assignment.insert(var_sequence[i], values[i]);
                 }
                 let content = var_sequence
                     .iter()
                     .map(|s| EquationContent::Variable(s))
                     .collect_vec();
-                if substitution.apply(&content).join("") == lhs_substring {
-                    return Some(substitution);
+                if assignment.apply(&content).join("") == lhs_substring {
+                    return Some(assignment);
                 }
             } else {
                 return None;
@@ -510,7 +517,7 @@ fn equation_subsequence_solutions<'a>(
 #[test]
 fn test_new_eq_solver() {
     let lhs_assignment = "abcdeafa";
-    let sols = solutions_for_equation(
+    let sols = partial_assignments_for_equation(
         &lhs_assignment,
         &[
             EquationContent::Variable("q"),
@@ -521,10 +528,10 @@ fn test_new_eq_solver() {
         ],
         "",
     );
-    print_solutions(&sols, lhs_assignment);
+    print_assignments(&sols, lhs_assignment);
 
     let lhs_assignment = "cdababe";
-    let sols = solutions_for_equation(
+    let sols = partial_assignments_for_equation(
         &lhs_assignment,
         &[
             EquationContent::Variable("r"),
@@ -536,12 +543,12 @@ fn test_new_eq_solver() {
         ],
         "",
     );
-    print_solutions(&sols, lhs_assignment);
+    print_assignments(&sols, lhs_assignment);
 }
 
 fn partition_string<'a>(string: &CharOperator<'a>, num_vars: usize) -> Vec<Vec<&'a str>> {
     let partition_positions = (0..string.len() + 1).combinations_with_replacement(num_vars - 1);
-    let mut substitutions = Vec::with_capacity(partition_positions.try_len().unwrap());
+    let mut assignments = Vec::with_capacity(partition_positions.try_len().unwrap());
     for partition_position in partition_positions {
         let mut partition_position = partition_position;
         partition_position.insert(0, 0);
@@ -551,7 +558,7 @@ fn partition_string<'a>(string: &CharOperator<'a>, num_vars: usize) -> Vec<Vec<&
         } else {
             string.multi_substring(&partition_position)
         };
-        substitutions.push(sub);
+        assignments.push(sub);
     }
-    substitutions
+    assignments
 }

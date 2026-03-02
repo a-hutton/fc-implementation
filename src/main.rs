@@ -1,9 +1,11 @@
+mod assignment;
 mod formula;
 mod formula_parser;
 mod strutils;
 mod tests;
 
-use crate::formula::{EquationContent, Formula, UNIVERSE_CONSTANT};
+use crate::assignment::Assignment;
+use crate::formula::Formula;
 use crate::strutils::{unicode_normalise, CharOperator};
 use clap::Parser;
 use std::fs;
@@ -47,18 +49,18 @@ fn main() {
                     let solutions = find_solutions(&parsed_formula, &text_chars);
                     println!("Found {} solutions", solutions.len());
                     if !args.quiet {
-                        print_solutions(&solutions, text.as_str());
+                        print_assignments(&solutions, text.as_str());
                     }
                 }
             }
         }
         ProgramCommand::CheckAssignment => {
             let assignment_strings = &args.assignment.unwrap();
-            let mut substitution = Substitution::new(assignment_strings.len());
+            let mut assignment = Assignment::new(assignment_strings.len());
             for var_assignment in assignment_strings {
                 // Split at first colon
                 if let Some((var_name, val)) = var_assignment.split_once(":") {
-                    substitution.insert(var_name, val);
+                    assignment.insert(var_name, val);
                 } else {
                     println!(
                         "Invalid assignment string format: '{}'. Expected <VAR_NAME>:<VALUE>",
@@ -77,7 +79,7 @@ fn main() {
                 Some(parsed_formula) => {
                     let free_vars = parsed_formula.free_vars();
                     for free_var in &free_vars {
-                        if !substitution.keys.contains(free_var) {
+                        if !assignment.keys.contains(free_var) {
                             println!(
                                 "Free variable {} from formula is missing from assignment",
                                 free_var
@@ -85,18 +87,18 @@ fn main() {
                             return;
                         }
                     }
-                    for var_name in &substitution.keys {
+                    for var_name in &assignment.keys {
                         if !free_vars.contains(var_name) {
                             println!("Unknown variable {} given assignment", var_name);
                             return;
                         }
                     }
                     let is_satisfying =
-                        parsed_formula.check_substitution(&text_chars, &substitution);
+                        parsed_formula.is_satisfying_assignment(&text_chars, &assignment);
                     println!("Is Satisfying Assignment: {}", is_satisfying);
                     if !args.quiet {
-                        for i in 0..substitution.keys.len() {
-                            println!("{}: \"{}\"", substitution.keys[i], substitution.values[i]);
+                        for i in 0..assignment.keys.len() {
+                            println!("{}: \"{}\"", assignment.keys[i], assignment.values[i]);
                         }
                     }
                 }
@@ -155,12 +157,12 @@ enum ProgramCommand {
 
 /// Find all the assignments to variables in a formula based on values in the universe of
 /// substrings of `word` that satisfy the given formula.
-fn find_solutions<'a>(formula: &'a Formula, word: &'a CharOperator) -> Vec<Substitution<'a>> {
+fn find_solutions<'a>(formula: &'a Formula, word: &'a CharOperator) -> Vec<Assignment<'a>> {
     formula.all_solutions(word)
 }
 
-/// Prints to stdout a pretty-printed CSV formatted table of all substitutions
-fn print_solutions(subs: &Vec<Substitution>, universe: &str) -> usize {
+/// Prints to stdout a pretty-printed CSV formatted table of all given assignments
+fn print_assignments(subs: &Vec<Assignment>, universe: &str) -> usize {
     if subs.is_empty() {
         println!("No satisfying assignments found");
         return 0;
@@ -196,143 +198,4 @@ fn print_solutions(subs: &Vec<Substitution>, universe: &str) -> usize {
         count += 1;
     }
     count
-}
-
-/// Represents a substitution (σ in the literature). An assignment mapping variable names to values
-/// from the universe
-#[derive(Eq, PartialEq, Hash, Debug, Clone)]
-struct Substitution<'a> {
-    keys: Vec<&'a str>,
-    values: Vec<&'a str>,
-    universe_constant: &'a str,
-}
-impl<'a> Substitution<'a> {
-    fn new(hint: usize) -> Self {
-        Substitution {
-            keys: Vec::with_capacity(hint),
-            values: Vec::with_capacity(hint),
-            universe_constant: "",
-        }
-    }
-
-    fn from_vars(vars: &[&'a str], w: &'a str) -> Self {
-        let len = vars.len();
-        let mut keys = Vec::with_capacity(vars.len());
-        for var in vars {
-            if !keys.contains(var) {
-                keys.push(var);
-            }
-        }
-
-        Substitution {
-            keys,
-            values: Vec::with_capacity(len),
-            universe_constant: w,
-        }
-    }
-
-    fn join(a: &Substitution<'a>, b: &Substitution<'a>) -> Result<Substitution<'a>, String> {
-        let mut new_keys = Vec::with_capacity(a.keys.len() + b.keys.len());
-        new_keys.extend(a.keys.clone());
-        let mut new_values = Vec::with_capacity(a.values.len() + b.values.len());
-        new_values.extend(a.values.clone());
-
-        for (i, var) in b.keys.iter().enumerate() {
-            if a.keys.contains(var) {
-                let a_val = a.value(var);
-                let b_val = b.value(var);
-                if a_val != b_val {
-                    return Err(format!(
-                        "Substitutions both contain variable {}, but assign different values. {} != {}",
-                        var, a_val, b_val
-                    ));
-                }
-            } else {
-                new_keys.push(var);
-                new_values.push(b.values[i]);
-            }
-        }
-        Ok(Substitution {
-            keys: new_keys,
-            values: new_values,
-            universe_constant: a.universe_constant,
-        })
-    }
-
-    fn value(&self, var: &str) -> &str {
-        if var == UNIVERSE_CONSTANT {
-            self.universe_constant
-        } else {
-            let mut var_idx = 0;
-            for key in &self.keys {
-                if var == *key {
-                    break;
-                }
-                var_idx += 1;
-            }
-            self.values[var_idx]
-        }
-    }
-
-    fn insert(&mut self, var: &'a str, value: &'a str) {
-        for (i, &key) in self.keys.iter().enumerate() {
-            if key == var {
-                if self.values.len() <= i {
-                    self.values.push(value);
-                } else {
-                    self.values[i] = value;
-                }
-                return;
-            }
-        }
-        // if key not found, insert
-        self.keys.push(var);
-        self.values.push(value);
-    }
-
-    fn apply(&self, terms: &[EquationContent<'a>]) -> Vec<&'a str> {
-        let mut new_terms = Vec::with_capacity(terms.len());
-        for term in terms {
-            match term {
-                EquationContent::Variable(v) => {
-                    let val = if *v == UNIVERSE_CONSTANT {
-                        self.universe_constant
-                    } else {
-                        let mut var_idx = 0;
-                        for key in &self.keys {
-                            if *v == *key {
-                                break;
-                            }
-                            var_idx += 1;
-                        }
-                        self.values[var_idx]
-                    };
-                    new_terms.push(val);
-                }
-                EquationContent::Constant(c) => {
-                    new_terms.push(*c);
-                }
-                EquationContent::UniverseConstant => {
-                    new_terms.push(self.universe_constant);
-                }
-            }
-        }
-        new_terms
-    }
-
-    fn extend_with_universe(
-        substitution: &Substitution<'a>,
-        vars: &[&'a str],
-        universe: &[&'a str],
-    ) -> Vec<Substitution<'a>> {
-        let mut subs = Vec::with_capacity(universe.len() * vars.len());
-        for &var in vars {
-            for &val in universe {
-                let mut new_sub = substitution.clone();
-                new_sub.insert(var, val);
-                subs.push(new_sub);
-            }
-        }
-        subs
-    }
 }
