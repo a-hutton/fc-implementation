@@ -47,6 +47,7 @@ impl<'a> Formula<'a> {
     pub fn is_satisfying_assignment(&self, w: &CharOperator, assignment: &Assignment) -> bool {
         match self {
             Formula::Equation { lhs, rhs } => {
+                // TODO - must check that all values are in the universe
                 let lhs_value = assignment.value(lhs);
                 let rhs_value = assignment.apply(rhs).join("");
                 lhs_value == rhs_value
@@ -73,18 +74,11 @@ impl<'a> Formula<'a> {
                 var,
                 quantifier,
             } => {
-                let mut altered_assignment =
-                    Assignment::from_vars(&assignment.keys, assignment.universe_constant);
-                altered_assignment.keys.push(var);
-                for val in &assignment.values {
-                    altered_assignment.values.push(*val);
-                }
-                altered_assignment.values.push("");
-                let last_idx = altered_assignment.values.len() - 1;
+                let mut altered_assignment = assignment.clone();
                 match quantifier {
                     Quantifier::Universal => {
                         for factor in w.generate_factors() {
-                            altered_assignment.values[last_idx] = factor;
+                            altered_assignment.insert(var, factor);
                             let holds = inner.is_satisfying_assignment(w, &altered_assignment);
                             if holds {
                                 return false;
@@ -94,7 +88,7 @@ impl<'a> Formula<'a> {
                     }
                     Quantifier::Existential => {
                         for factor in w.generate_factors() {
-                            altered_assignment.values[last_idx] = factor;
+                            altered_assignment.insert(var, factor);
                             let holds = inner.is_satisfying_assignment(w, &altered_assignment);
                             if holds {
                                 return true;
@@ -301,12 +295,42 @@ impl<'a> Formula<'a> {
                 satisfying_assignments.into_iter().collect_vec()
             }
             Formula::Quantifier {
-                var: _,
-                quantifier: _quantifier,
-                inner: _,
-            } => {
-                todo!()
-            }
+                var,
+                quantifier,
+                inner,
+            } => match quantifier {
+                Quantifier::Universal => {
+                    let inner_solutions = inner.all_solutions(w);
+                    let mut var_values = HashSet::new();
+                    for solution in &inner_solutions {
+                        let val = solution.value(var);
+                        var_values.insert(val);
+                    }
+                    if var_values.len() != w.generate_factors().len() {
+                        return vec![];
+                    }
+                    inner_solutions
+                        .into_iter()
+                        .map(|mut ass| {
+                            ass.remove_variable(var);
+                            ass
+                        })
+                        .collect_vec()
+                }
+                Quantifier::Existential => {
+                    let inner_solutions = inner.all_solutions(w);
+                    if inner_solutions.is_empty() {
+                        return vec![];
+                    }
+                    // remove the quantified variable
+                    let mut new_solutions = HashSet::with_capacity(inner_solutions.len());
+                    for mut ass in inner_solutions {
+                        ass.remove_variable(var);
+                        new_solutions.insert(ass);
+                    }
+                    new_solutions.into_iter().collect_vec()
+                }
+            },
         }
     }
 }
@@ -396,7 +420,7 @@ fn partial_assignments_for_equation<'a>(
     // Case: no variables on rhs (hit when lhs is universe constant)
     if formula_vars.is_empty() {
         // Not an empty 'set' of assignments, the set containing an empty assignment
-        return vec![Assignment::from_vars(&[], lhs_assignment)];
+        return vec![Assignment::from_vars(&[], universe_word)];
     }
 
     // Case: no constants on rhs

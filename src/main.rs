@@ -56,7 +56,7 @@ fn main() {
         }
         ProgramCommand::CheckAssignment => {
             let assignment_strings = &args.assignment.unwrap();
-            let mut assignment = Assignment::new(assignment_strings.len());
+            let mut assignment = Assignment::new(assignment_strings.len(), text_chars.as_str());
             for var_assignment in assignment_strings {
                 // Split at first colon
                 if let Some((var_name, val)) = var_assignment.split_once(":") {

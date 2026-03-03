@@ -10,11 +10,11 @@ pub struct Assignment<'a> {
     pub universe_constant: &'a str,
 }
 impl<'a> Assignment<'a> {
-    pub fn new(hint: usize) -> Self {
+    pub fn new(hint: usize, universe_constant: &'a str) -> Self {
         Assignment {
             keys: Vec::with_capacity(hint),
             values: Vec::with_capacity(hint),
-            universe_constant: "",
+            universe_constant,
         }
     }
 
@@ -123,6 +123,16 @@ impl<'a> Assignment<'a> {
         new_terms
     }
 
+    pub fn remove_variable(&mut self, var: &'a str) {
+        for i in 0..self.keys.len() {
+            if self.keys[i] == var {
+                self.keys.swap_remove(i);
+                self.values.swap_remove(i);
+                return;
+            }
+        }
+    }
+
     pub fn extend_with_universe(
         assignment: &Assignment<'a>,
         vars: &[&'a str],
@@ -177,5 +187,39 @@ fn test_hash_equality() {
         values: vec!["abc", "def", "ghi"],
         universe_constant: "abcdefghi",
     };
+    assert_eq!(hash_wrapper(a1), hash_wrapper(a2));
+}
+
+#[test]
+fn test_variable_removal() {
+    fn hash_wrapper<H: Hash>(h: H) -> u64 {
+        let mut hasher = std::hash::DefaultHasher::new();
+        h.hash(&mut hasher);
+        hasher.finish()
+    }
+    let mut a1 = Assignment {
+        keys: vec!["x", "y", "z"],
+        values: vec!["abc", "def", "ghi"],
+        universe_constant: "abcdefghi",
+    };
+    let a2 = Assignment {
+        keys: vec!["y", "z"],
+        values: vec!["def", "ghi"],
+        universe_constant: "abcdefghi",
+    };
+    a1.remove_variable("x");
+    assert_eq!(hash_wrapper(a1), hash_wrapper(a2));
+
+    let mut a1 = Assignment {
+        keys: vec!["x", "y", "z"],
+        values: vec!["abc", "def", "ghi"],
+        universe_constant: "abcdefghi",
+    };
+    let a2 = Assignment {
+        keys: vec!["x", "z"],
+        values: vec!["abc", "ghi"],
+        universe_constant: "abcdefghi",
+    };
+    a1.remove_variable("y");
     assert_eq!(hash_wrapper(a1), hash_wrapper(a2));
 }
