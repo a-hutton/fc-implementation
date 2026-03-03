@@ -202,8 +202,23 @@ impl<'a> Formula<'a> {
                     all_assignments
                 }
             }
-            Formula::Negation { inner: _inner } => {
-                todo!()
+            Formula::Negation { inner } => {
+                println!("Using negation without a guard (B && ¬A) may take exponentially long");
+                // This is brute force
+                let universe = w.generate_factors();
+                let free_vars = inner.free_vars();
+                let values =
+                    std::iter::repeat_n(universe, free_vars.len()).multi_cartesian_product();
+                values
+                    .map(|values| {
+                        let mut ass = Assignment::from_vars(&free_vars, w.as_str());
+                        for i in 0..free_vars.len() {
+                            ass.insert(free_vars[i], values[i])
+                        }
+                        ass
+                    })
+                    .filter(|assignment| !inner.is_satisfying_assignment(w, assignment))
+                    .collect_vec()
             }
             Formula::Conjunction { fragments } => {
                 let first_assignments = fragments[0].all_solutions(w);

@@ -198,7 +198,7 @@ fn test_disjunction() {
             num_solutions: 2,
         },
         SolutionTestCase {
-            formula: r#"x = x && ¬((x="" || x="ab") || (x="a" || x="b"))"#, // trivial x=x added to allow the negation
+            formula: r#"¬((x="" || x="ab") || (x="a" || x="b"))"#,
             universe: "ab",
             should_fail: false,
             num_solutions: 0,
