@@ -257,14 +257,33 @@ impl<'a> Formula<'a> {
                 }
             }
             Formula::Disjunction { fragments } => {
-                let mut satisfying_assignment = HashSet::new();
+                let free_vars: HashSet<&str> = HashSet::from_iter(self.free_vars());
+                let mut satisfying_assignments = HashSet::new();
+                let universe = w.generate_factors();
                 for fragment in fragments {
+                    let fragment_vars = HashSet::from_iter(fragment.free_vars());
+                    let missing_fragment_vars =
+                        free_vars.difference(&fragment_vars).copied().collect_vec();
                     let fragment_sat_assignments = fragment.all_solutions(w);
+                    let mut extended_fragment_sat_assignments = Vec::new();
                     for assignment in fragment_sat_assignments {
-                        satisfying_assignment.insert(assignment);
+                        if missing_fragment_vars.is_empty() {
+                            extended_fragment_sat_assignments.push(assignment);
+                        } else {
+                            let mutated_assignments = Assignment::extend_with_universe(
+                                &assignment,
+                                &missing_fragment_vars,
+                                &universe,
+                            );
+                            extended_fragment_sat_assignments.extend(mutated_assignments);
+                        }
+                    }
+
+                    for assignment in extended_fragment_sat_assignments {
+                        satisfying_assignments.insert(assignment);
                     }
                 }
-                satisfying_assignment.into_iter().collect_vec()
+                satisfying_assignments.into_iter().collect_vec()
             }
             Formula::Quantifier {
                 var: _,

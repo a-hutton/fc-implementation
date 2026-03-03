@@ -192,16 +192,34 @@ fn test_quantifiers() {
 fn test_disjunction() {
     let cases = [
         SolutionTestCase {
-            formula: r#"¬((x="" || x="ab") || (x="a" || x="b"))"#,
+            formula: r#"X="a" || X="aa""#,
+            universe: "aa",
+            should_fail: false,
+            num_solutions: 2,
+        },
+        SolutionTestCase {
+            formula: r#"x = x && ¬((x="" || x="ab") || (x="a" || x="b"))"#, // trivial x=x added to allow the negation
             universe: "ab",
             should_fail: false,
             num_solutions: 0,
         },
         SolutionTestCase {
-            formula: r#"X="a" || X="aa""#,
-            universe: "aa",
+            formula: r#"X="a" || X="b""#,
+            universe: "aabab",
             should_fail: false,
             num_solutions: 2,
+        },
+        SolutionTestCase {
+            formula: r#"X="a" ||( X="b" || X = "ab")"#,
+            universe: "aabab",
+            should_fail: false,
+            num_solutions: 3,
+        },
+        SolutionTestCase {
+            formula: r#"x = y "a" z || z = "bbb""#,
+            universe: "cadbbb",
+            should_fail: false,
+            num_solutions: 371,
         },
     ];
     test_case_runner(&cases);

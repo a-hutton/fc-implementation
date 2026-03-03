@@ -1,7 +1,9 @@
 use crate::formula::{EquationContent, UNIVERSE_CONSTANT};
+use itertools::Itertools;
+use std::hash::{Hash, Hasher};
 
 /// Represents an assignment (σ in the literature). Maps variable names to values from the universe
-#[derive(Eq, PartialEq, Hash, Debug, Clone)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub struct Assignment<'a> {
     pub keys: Vec<&'a str>,
     pub values: Vec<&'a str>,
@@ -126,14 +128,54 @@ impl<'a> Assignment<'a> {
         vars: &[&'a str],
         universe: &[&'a str],
     ) -> Vec<Assignment<'a>> {
+        let values = std::iter::repeat_n(universe, vars.len()).multi_cartesian_product();
         let mut assignments = Vec::with_capacity(universe.len() * vars.len());
-        for &var in vars {
-            for &val in universe {
-                let mut new_assignment = assignment.clone();
-                new_assignment.insert(var, val);
-                assignments.push(new_assignment);
+        for assignment_values in values {
+            let mut new_assignment = assignment.clone();
+            for i in 0..vars.len() {
+                new_assignment.insert(vars[i], assignment_values[i]);
             }
+            assignments.push(new_assignment);
         }
         assignments
     }
+}
+
+impl Hash for Assignment<'_> {
+    /// Hash will return the same values regardless of the internal sorting of the variables
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // List of indices sorted by key
+        let mut sorted_indices = (0..self.keys.len()).collect_vec();
+        sorted_indices.sort_by_key(|&i| self.keys[i]);
+        let mut sorted_keys = Vec::with_capacity(sorted_indices.len());
+        let mut sorted_values = Vec::with_capacity(sorted_indices.len());
+        for index in sorted_indices {
+            sorted_keys.push(self.keys[index]);
+            sorted_values.push(self.values[index]);
+        }
+
+        sorted_keys.hash(state);
+        sorted_values.hash(state);
+    }
+}
+
+#[test]
+fn test_hash_equality() {
+    fn hash_wrapper<H: Hash>(h: H) -> u64 {
+        let mut hasher = std::hash::DefaultHasher::new();
+        h.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    let a1 = Assignment {
+        keys: vec!["z", "x", "y"],
+        values: vec!["ghi", "abc", "def"],
+        universe_constant: "abcdefghi",
+    };
+    let a2 = Assignment {
+        keys: vec!["x", "y", "z"],
+        values: vec!["abc", "def", "ghi"],
+        universe_constant: "abcdefghi",
+    };
+    assert_eq!(hash_wrapper(a1), hash_wrapper(a2));
 }
