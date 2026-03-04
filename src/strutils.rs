@@ -79,6 +79,13 @@ impl<'a> CharOperator<'a> {
         &self.string[self.char_byte_indices[start]..self.char_byte_indices[end]]
     }
 
+    fn char_at(&self, idx: usize) -> &str {
+        if idx == self.len {
+            return &self.string[self.char_byte_indices[idx]..];
+        }
+        self.substring(idx, idx + 1)
+    }
+
     pub fn multi_substring(&self, positions: &[usize]) -> Vec<&'a str> {
         // TODO - should this be an iterator (iterfunc?)
         let mut substrings = Vec::with_capacity(positions.len());
@@ -119,24 +126,53 @@ impl<'a> CharOperator<'a> {
         self.string
     }
 
-    /// Constructs a list of all substrings of a given word. This assumes that the empty string is a
-    /// factor of all words
-    pub fn generate_factors(&self) -> Vec<&str> {
-        // maximum possible number of substrings: n(n+1)/2
-        let num_factors = self.len() * (self.len() + 1) / 2 + 1;
-        let mut factors = Vec::with_capacity(num_factors);
-        factors.push("");
+    fn suffix_array(&self) -> Vec<usize> {
+        (0..self.len)
+            .sorted_by_key(|i| self.substring(*i, self.len))
+            .collect_vec()
+    }
 
-        // sliding window for each possible length of subword
-        for len in 1..self.len() {
-            for i in 0..(self.len() - len + 1) {
-                let substr = self.substring(i, i + len);
-                if !factors.contains(&substr) {
-                    factors.push(substr);
-                }
+    fn lcp_array(&self, suffix_array: &[usize]) -> Vec<usize> {
+        let mut lcp_array = Vec::with_capacity(suffix_array.len());
+        lcp_array.push(0);
+        for i in 0..suffix_array.len() {
+            if i > 0 {
+                let lcp = self.longest_common_prefix(suffix_array[i - 1], suffix_array[i]);
+                lcp_array.push(lcp);
             }
         }
-        factors.push(self.as_str());
+        lcp_array
+    }
+
+    /// Returns the _length_ of the longest common prefix of self.string[start_1..] and self.string[start_2..]
+    fn longest_common_prefix(&self, start_1: usize, start_2: usize) -> usize {
+        let mut char_count = 0;
+        loop {
+            let char_1 = self.char_at(start_1 + char_count);
+            let char_2 = self.char_at(start_2 + char_count);
+            if char_1 != char_2 {
+                return char_count;
+            }
+            if char_count == self.len {
+                return start_1;
+            }
+            char_count += 1;
+        }
+    }
+
+    pub fn generate_factors(&self) -> Vec<&str> {
+        let suffix_array = self.suffix_array();
+        let lcp_array = self.lcp_array(&suffix_array);
+        // TODO - max capacity is 0.5 * n * (n+1) + 1
+        let mut factors = Vec::new();
+        for i in 0..suffix_array.len() {
+            let suffix_len = self.len - suffix_array[i];
+            // Skip the first lcp_array[i] prefixes, as these are duplicates
+            for j in lcp_array[i]..suffix_len {
+                factors.push(self.substring(suffix_array[i], suffix_array[i] + j + 1));
+            }
+        }
+        factors.push("");
         factors
     }
 }
