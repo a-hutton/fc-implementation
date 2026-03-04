@@ -135,7 +135,7 @@ fn test_conjunction() {
             num_solutions: 1,
         },
         SolutionTestCase {
-            formula: r#"x = "a" y z && (x=$U && z="b")"#,
+            formula: r#"x = "a" y z && x=$U && z="b""#,
             universe: "aaab",
             should_fail: false,
             num_solutions: 1,
@@ -198,7 +198,7 @@ fn test_disjunction() {
             num_solutions: 2,
         },
         SolutionTestCase {
-            formula: r#"¬((x="" || x="ab") || (x="a" || x="b"))"#,
+            formula: r#"¬(x="" || x="ab" || x="a" || x="b")"#,
             universe: "ab",
             should_fail: false,
             num_solutions: 0,

@@ -7,8 +7,8 @@ unsafe_formula = _{disjunction | conjunction}
 
 simple_equation = {variable ~ "=" ~ (constant | variable)+}
 negation = {"¬" ~ safe_formula}
-conjunction = { safe_formula ~ ("&&"|"∧") ~ safe_formula }
-disjunction = { safe_formula ~ ("||"|"∨") ~ safe_formula }
+conjunction = { safe_formula ~ (("&&"|"∧") ~ safe_formula)+ }
+disjunction = { safe_formula ~ (("||"|"∨") ~ safe_formula)+ }
 existential = {("exists" | "∃") ~ variable  ~ safe_formula }
 universal = {("forall" | "∀") ~ variable ~ safe_formula }
 
