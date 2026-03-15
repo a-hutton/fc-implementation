@@ -451,7 +451,17 @@ fn partial_assignments_for_equation<'a>(
 
 /// Returns assignments that satisfy the equation formed by taking the first variable sequence in
 /// defined by `variables` and end indices in `variable_sequence_indices`, then the first constant
-/// in `combined_constants`, and so on, alternating. Assumes pattern starts and ends with a variable
+/// in `combined_constants`, and so on, alternating. Assumes pattern starts and ends with a variable.
+///
+/// E.g. x = abc "mn" d
+/// ```
+/// variables = &["a", "b", "c", "d"];
+/// variable_sequence_indices = &[2,3];
+/// ```
+/// ## Parameters
+/// - `variables`: The variables in the equation rhs, in the order they appear
+/// - `variable_sequence_indices`: Indices of `variables` showing the _end_ index of each variable
+///   sequence in the rhs
 fn equation_assignments<'a>(
     variables: &[&'a str],
     variable_sequence_indices: &[usize],
@@ -517,6 +527,8 @@ fn equation_assignments<'a>(
 }
 
 /// All assignments to a variable sequence across possible combinations of start/end indices
+/// If it is known that for this sequence of variables V, there are a limited number of possibilities
+/// for where σ(V) falls within the lhs assignment, they can be passed as possible start/end indices here
 fn var_sequence_partial_assignment<'a>(
     var_sequence: &[&'a str],
     lhs_assignment: &CharOperator<'a>,
