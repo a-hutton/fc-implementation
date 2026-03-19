@@ -18,7 +18,7 @@ impl<'a> CharOperator<'a> {
         };
 
         let bytes = string.as_bytes();
-        let mut sizes = Vec::with_capacity(string.len());
+        let mut sizes = Vec::with_capacity(string.len() + 1);
 
         let mut char_count = 0;
 
