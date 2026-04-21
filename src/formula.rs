@@ -176,6 +176,10 @@ impl<'a> Formula<'a> {
                         {
                             continue;
                         }
+                        // edge case
+                        if required_prefix == required_suffix && lhs_value == required_prefix {
+                            continue;
+                        }
                         let trimmed_lhs_value = &lhs_value
                             [required_prefix.len()..lhs_value.len() - required_suffix.len()];
                         let assignments = partial_assignments_for_equation(

@@ -65,6 +65,13 @@ fn test_equation_solutions() {
             should_fail: false,
             num_solutions: 4,
         },
+        // Edge case - prefix = suffix = lhs
+        SolutionTestCase {
+            formula: r#"x= "a" y "a""#,
+            universe: "aa",
+            should_fail: false,
+            num_solutions: 1,
+        },
     ];
     test_case_runner(&cases);
 }
