@@ -171,13 +171,12 @@ impl<'a> Formula<'a> {
                 } else {
                     let mut all_assignments = Vec::new();
                     for lhs_value in w.generate_factors() {
+                        if lhs_value.len() < required_prefix.len() + required_suffix.len() {
+                            continue;
+                        }
                         if !lhs_value.starts_with(&required_prefix)
                             || !lhs_value.ends_with(&required_suffix)
                         {
-                            continue;
-                        }
-                        // edge case
-                        if required_prefix == required_suffix && lhs_value == required_prefix {
                             continue;
                         }
                         let trimmed_lhs_value = &lhs_value

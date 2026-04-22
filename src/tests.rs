@@ -65,10 +65,16 @@ fn test_equation_solutions() {
             should_fail: false,
             num_solutions: 4,
         },
-        // Edge case - prefix = suffix = lhs
+        // Edge case - lhs assignment has prefix and suffix, but they overlap
         SolutionTestCase {
             formula: r#"x= "a" y "a""#,
             universe: "aa",
+            should_fail: false,
+            num_solutions: 1,
+        },
+        SolutionTestCase {
+            formula: r#"x= "ab" y "b""#,
+            universe: "abb",
             should_fail: false,
             num_solutions: 1,
         },
