@@ -1,4 +1,4 @@
-use crate::assignment::Assignment;
+use crate::assignment::{find_all_joins, Assignment};
 use crate::print_assignments;
 use crate::strutils::CharOperator;
 use itertools::Itertools;
@@ -226,54 +226,7 @@ impl<'a> Formula<'a> {
                     }
                     assignments
                 };
-
-                // Find the variables that appear in fragments[1..], but not fragments[0]
-                let first_fragment_vars = fragments[0].free_vars();
-                let mut unseen_vars = HashSet::new();
-                for fragment in &fragments[1..] {
-                    let fragment_vars = fragment.free_vars();
-                    for var in fragment_vars {
-                        if !first_fragment_vars.contains(&var) {
-                            unseen_vars.insert(var);
-                        }
-                    }
-                }
-                let unseen_vars = unseen_vars.into_iter().collect_vec();
-                let universe = w.generate_factors();
-
-                if unseen_vars.is_empty() {
-                    first_assignments
-                        .into_iter()
-                        .filter(|assignment| {
-                            for fragment in &fragments[1..] {
-                                if !fragment.is_satisfying_assignment(w, assignment) {
-                                    return false;
-                                }
-                            }
-                            true
-                        })
-                        .collect_vec()
-                } else {
-                    let mut satisfying_assignments = Vec::new();
-                    for assignment in &first_assignments {
-                        let modified_assignments =
-                            Assignment::extend_with_universe(assignment, &unseen_vars, &universe);
-
-                        let satisfying_modified_assignments = modified_assignments
-                            .into_iter()
-                            .filter(|assignment| {
-                                for fragment in &fragments[1..] {
-                                    if !fragment.is_satisfying_assignment(w, assignment) {
-                                        return false;
-                                    }
-                                }
-                                true
-                            })
-                            .collect_vec();
-                        satisfying_assignments.extend(satisfying_modified_assignments);
-                    }
-                    satisfying_assignments
-                }
+                find_all_joins(&sub_assignments)
             }
             Formula::Disjunction { fragments } => {
                 let free_vars: HashSet<&str> = HashSet::from_iter(self.free_vars());

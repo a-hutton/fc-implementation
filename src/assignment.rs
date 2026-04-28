@@ -224,7 +224,7 @@ fn test_variable_removal() {
     assert_eq!(hash_wrapper(a1), hash_wrapper(a2));
 }
 
-fn find_all_joins<'a>(assignments_matrix: &'a [Vec<Assignment>]) -> Vec<Assignment<'a>> {
+pub fn find_all_joins<'a>(assignments_matrix: &[Vec<Assignment<'a>>]) -> Vec<Assignment<'a>> {
     if assignments_matrix.len() == 1 {
         return assignments_matrix[0].clone();
     }
