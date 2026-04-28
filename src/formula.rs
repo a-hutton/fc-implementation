@@ -222,29 +222,50 @@ impl<'a> Formula<'a> {
                     .iter()
                     .filter(|f| !matches!(f, Formula::Negation { .. }))
                     .collect_vec();
-                let sub_assignments = {
-                    let mut assignments = Vec::with_capacity(fragments.len());
-                    for fragment in non_negations {
-                        assignments.push(fragment.all_solutions(w))
-                    }
-                    assignments
-                };
-                // all satisfying assignments for the conjunction of the non-negative sub-formulas
-                let sub_solutions = find_all_joins(&sub_assignments);
-                let negations = fragments
-                    .iter()
-                    .filter(|f| matches!(f, Formula::Negation { .. }))
-                    .collect_vec();
-                let mut assignments = Vec::with_capacity(sub_solutions.len());
-                for assignment in &sub_solutions {
-                    for formula in &negations {
-                        if !formula.is_satisfying_assignment(w, assignment) {
-                            assignments.push(assignment.clone())
+                if non_negations.is_empty() {
+                    // edge case - a conjunction consisting of only negations
+                    let sub_assignments = {
+                        let mut assignments = Vec::with_capacity(fragments.len());
+                        // For all fragments (they are all negations)
+                        for fragment in fragments {
+                            assignments.push(fragment.all_solutions(w))
                         }
+                        assignments
+                    };
+                    // all satisfying assignments for the conjunction of the negations
+                    find_all_joins(&sub_assignments)
+                } else {
+                    // Find all sat assignments for the conjunction of non-negated sub-formulas
+                    let sub_assignments = {
+                        let mut assignments = Vec::with_capacity(fragments.len());
+                        // For just the non-negations
+                        for fragment in non_negations {
+                            assignments.push(fragment.all_solutions(w))
+                        }
+                        assignments
+                    };
+                    // all satisfying assignments for the conjunction of the non-negative sub-formulas
+                    let sub_solutions = find_all_joins(&sub_assignments);
+                    let negations = fragments
+                        .iter()
+                        .filter(|f| matches!(f, Formula::Negation { .. }))
+                        .collect_vec();
+                    if negations.is_empty() {
+                        sub_solutions
+                    } else {
+                        // Filter out assignments that do not satisfy the negation portion
+                        let mut assignments = Vec::with_capacity(sub_solutions.len());
+                        for assignment in &sub_solutions {
+                            for formula in &negations {
+                                if formula.is_satisfying_assignment(w, assignment) {
+                                    assignments.push(assignment.clone())
+                                }
+                            }
+                        }
+
+                        assignments
                     }
                 }
-
-                assignments
             }
             Formula::Disjunction { fragments } => {
                 let free_vars: HashSet<&str> = HashSet::from_iter(self.free_vars());
