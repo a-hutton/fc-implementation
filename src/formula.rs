@@ -218,15 +218,33 @@ impl<'a> Formula<'a> {
                     .collect_vec()
             }
             Formula::Conjunction { fragments } => {
-                let first_assignments = fragments[0].all_solutions(w);
+                let non_negations = fragments
+                    .iter()
+                    .filter(|f| !matches!(f, Formula::Negation { .. }))
+                    .collect_vec();
                 let sub_assignments = {
                     let mut assignments = Vec::with_capacity(fragments.len());
-                    for fragment in fragments {
+                    for fragment in non_negations {
                         assignments.push(fragment.all_solutions(w))
                     }
                     assignments
                 };
-                find_all_joins(&sub_assignments)
+                // all satisfying assignments for the conjunction of the non-negative sub-formulas
+                let sub_solutions = find_all_joins(&sub_assignments);
+                let negations = fragments
+                    .iter()
+                    .filter(|f| matches!(f, Formula::Negation { .. }))
+                    .collect_vec();
+                let mut assignments = Vec::with_capacity(sub_solutions.len());
+                for assignment in &sub_solutions {
+                    for formula in &negations {
+                        if !formula.is_satisfying_assignment(w, assignment) {
+                            assignments.push(assignment.clone())
+                        }
+                    }
+                }
+
+                assignments
             }
             Formula::Disjunction { fragments } => {
                 let free_vars: HashSet<&str> = HashSet::from_iter(self.free_vars());
