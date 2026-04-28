@@ -223,3 +223,43 @@ fn test_variable_removal() {
     a1.remove_variable("y");
     assert_eq!(hash_wrapper(a1), hash_wrapper(a2));
 }
+
+fn find_all_joins<'a>(assignments_matrix: &'a [Vec<Assignment>]) -> Vec<Assignment<'a>> {
+    if assignments_matrix.len() == 1 {
+        return assignments_matrix[0].clone();
+    }
+    let mut new_assignments = Vec::with_capacity(assignments_matrix.len());
+    for assignment in &assignments_matrix[0] {
+        let sub_assignments = find_all_joins(&assignments_matrix[1..]);
+        for sub_assignment in sub_assignments {
+            if let Ok(res) = Assignment::join(assignment, &sub_assignment) {
+                new_assignments.push(res);
+            }
+        }
+    }
+    new_assignments
+}
+
+#[test]
+fn test_find_joins() {
+    let universe = "abcdefghi";
+    let assignments_matrix = vec![
+        vec![Assignment {
+            keys: vec!["x", "y", "z"],
+            values: vec!["xx", "yy", "zz"],
+            universe_constant: universe,
+        }],
+        vec![Assignment {
+            keys: vec!["a", "b", "z"],
+            values: vec!["aa", "bb", "zz"],
+            universe_constant: universe,
+        }],
+        vec![Assignment {
+            keys: vec!["c", "b", "z"],
+            values: vec!["cc", "bb", "zz"],
+            universe_constant: universe,
+        }],
+    ];
+
+    println!("{:?}", find_all_joins(&assignments_matrix));
+}

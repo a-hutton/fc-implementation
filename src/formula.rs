@@ -219,6 +219,13 @@ impl<'a> Formula<'a> {
             }
             Formula::Conjunction { fragments } => {
                 let first_assignments = fragments[0].all_solutions(w);
+                let sub_assignments = {
+                    let mut assignments = Vec::with_capacity(fragments.len());
+                    for fragment in fragments {
+                        assignments.push(fragment.all_solutions(w))
+                    }
+                    assignments
+                };
 
                 // Find the variables that appear in fragments[1..], but not fragments[0]
                 let first_fragment_vars = fragments[0].free_vars();
