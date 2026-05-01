@@ -218,6 +218,10 @@ impl<'a> Formula<'a> {
                     .collect_vec()
             }
             Formula::Conjunction { fragments } => {
+                let all_solutions = fragments.iter().map(|f| f.all_solutions(w)).collect_vec();
+                let solutions = find_all_joins(&all_solutions);
+                return solutions;
+
                 let non_negations = fragments
                     .iter()
                     .filter(|f| !matches!(f, Formula::Negation { .. }))

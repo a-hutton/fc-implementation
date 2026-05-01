@@ -323,6 +323,12 @@ fn tests_from_literature() {
             should_fail: false,
             num_solutions: 0,
         },
+        SolutionTestCase {
+            formula: r#"(∃ p(∃ s(x="bbb" && ¬∃ ph(∃ sh(($U=ph x sh ∧ $U=p x s ∧ ¬ph=p))))))"#,
+            universe: "ababbba",
+            should_fail: false,
+            num_solutions: 1,
+        },
         // Theory of Concatenation over Finite Models - Example 3.5
         // 'σ(x) occurs exactly once in w'
         SolutionTestCase {
