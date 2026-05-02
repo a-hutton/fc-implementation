@@ -135,7 +135,7 @@ struct Args {
 
 #[derive(clap::Args, Clone, Debug)]
 #[group(required = true, multiple = false)]
-/// Uses clap to require at least one of these, but no more than one.
+// Uses clap to require at least one of these, but no more than one.
 struct TextOption {
     /// The text universe the search is applied to. Mutually exclusive with --text
     #[arg(short, long, required_unless_present = "file")]
