@@ -348,6 +348,17 @@ fn tests_from_literature() {
     test_case_runner(&cases);
 }
 
+#[test]
+fn minimal_index_exception_test() {
+    let cases = [SolutionTestCase {
+        formula: r#"exists p(x = "a" && ¬ exists y( y = p))"#,
+        universe: "aa",
+        should_fail: false,
+        num_solutions: 0,
+    }];
+    test_case_runner(&cases);
+}
+
 struct FreeVarTestCase {
     formula: &'static str,
     free_vars: Vec<&'static str>,

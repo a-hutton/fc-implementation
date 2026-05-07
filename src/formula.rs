@@ -218,9 +218,9 @@ impl<'a> Formula<'a> {
                     .collect_vec()
             }
             Formula::Conjunction { fragments } => {
-                let all_solutions = fragments.iter().map(|f| f.all_solutions(w)).collect_vec();
-                let solutions = find_all_joins(&all_solutions);
-                return solutions;
+                // let all_solutions = fragments.iter().map(|f| f.all_solutions(w)).collect_vec();
+                // let solutions = find_all_joins(&all_solutions);
+                // return solutions;
 
                 let non_negations = fragments
                     .iter()
@@ -260,10 +260,15 @@ impl<'a> Formula<'a> {
                         // Filter out assignments that do not satisfy the negation portion
                         let mut assignments = Vec::with_capacity(sub_solutions.len());
                         for assignment in &sub_solutions {
+                            let mut satisfies_negation = true;
                             for formula in &negations {
-                                if formula.is_satisfying_assignment(w, assignment) {
-                                    assignments.push(assignment.clone())
+                                if !formula.is_satisfying_assignment(w, assignment) {
+                                    satisfies_negation = false;
+                                    break;
                                 }
+                            }
+                            if satisfies_negation {
+                                assignments.push(assignment.clone())
                             }
                         }
 
