@@ -168,13 +168,15 @@ fn print_assignments(assignments: &Vec<Assignment>, universe: &str) -> usize {
         return 0;
     }
 
+    let max_width = 80; // max column width
+
     // guaranteed to be the longest variable, helps for printing as a 'table'
     let universe_len = strutils::count_chars(universe);
 
     let var_names = &assignments[0].keys;
     // print var names
     for (i, var_name) in var_names.iter().enumerate() {
-        print!("{var:width$}", var = var_name, width = universe_len);
+        print!("{var:width$}", var = var_name, width = max_width);
         if i < var_names.len() - 1 {
             print!(", ")
         }
@@ -185,11 +187,16 @@ fn print_assignments(assignments: &Vec<Assignment>, universe: &str) -> usize {
     for assignment in assignments {
         for i in 0..assignment.keys.len() {
             let val = if assignment.values[i].is_empty() {
-                "ε"
+                CharOperator::new("ε")
             } else {
-                assignment.values[i]
+                CharOperator::new(assignment.values[i])
             };
-            print!("{val:width$}", val = val, width = universe_len);
+            let val = if val.len() > max_width - 3 {
+                String::from(val.substring(0, max_width - 3)) + "..."
+            } else {
+                String::from(val.as_str())
+            };
+            print!("{val:width$}", val = val, width = max_width);
             if i < var_names.len() - 1 {
                 print!(", ")
             }
