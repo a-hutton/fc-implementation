@@ -49,7 +49,7 @@ fn main() {
                     let solutions = find_solutions(&parsed_formula, &text_chars);
                     println!("Found {} solutions", solutions.len());
                     if !args.quiet {
-                        print_assignments(&solutions, text.as_str());
+                        print_assignments(&solutions, text.as_str(), args.column_width);
                     }
                 }
             }
@@ -131,6 +131,9 @@ struct Args {
     /// An assignment to be verified (if command = check-assignment). Formatted as '<VAR_NAME>:<ASSIGNMENT_STRING>'
     #[arg(short, long, required_if_eq("command", "check-assignment"))]
     assignment: Option<Vec<String>>,
+    /// Maximum width of the displayed columns of assignments
+    #[arg(short, long, default_value_t = 30)]
+    column_width: usize,
 }
 
 #[derive(clap::Args, Clone, Debug)]
@@ -162,21 +165,16 @@ fn find_solutions<'a>(formula: &'a Formula, word: &'a CharOperator) -> Vec<Assig
 }
 
 /// Prints to stdout a pretty-printed CSV formatted table of all given assignments
-fn print_assignments(assignments: &Vec<Assignment>, universe: &str) -> usize {
+fn print_assignments(assignments: &Vec<Assignment>, universe: &str, column_width: usize) -> usize {
     if assignments.is_empty() {
         println!("No satisfying assignments found");
         return 0;
     }
 
-    let max_width = 80; // max column width
-
-    // guaranteed to be the longest variable, helps for printing as a 'table'
-    let universe_len = strutils::count_chars(universe);
-
     let var_names = &assignments[0].keys;
     // print var names
     for (i, var_name) in var_names.iter().enumerate() {
-        print!("{var:width$}", var = var_name, width = max_width);
+        print!("{var:width$}", var = var_name, width = column_width);
         if i < var_names.len() - 1 {
             print!(", ")
         }
@@ -191,12 +189,12 @@ fn print_assignments(assignments: &Vec<Assignment>, universe: &str) -> usize {
             } else {
                 CharOperator::new(assignment.values[i])
             };
-            let val = if val.len() > max_width - 3 {
-                String::from(val.substring(0, max_width - 3)) + "..."
+            let val = if val.len() > column_width - 3 {
+                String::from(val.substring(0, column_width - 3)) + "..."
             } else {
                 String::from(val.as_str())
             };
-            print!("{val:width$}", val = val, width = max_width);
+            print!("{val:width$}", val = val, width = column_width);
             if i < var_names.len() - 1 {
                 print!(", ")
             }

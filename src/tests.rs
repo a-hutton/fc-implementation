@@ -262,7 +262,7 @@ fn test_case_runner(cases: &[SolutionTestCase]) {
                 let normalised = unicode_normalise(test.universe);
                 let w = CharOperator::new(normalised.as_str());
                 let solutions = find_solutions(&formula, &w);
-                let len = print_assignments(&solutions, test.universe);
+                let len = print_assignments(&solutions, test.universe, test.universe.len());
                 println!("Found {len} solutions");
                 assert_eq!(len, test.num_solutions);
             }
@@ -375,6 +375,6 @@ fn difficult_test() {
     let universe = "ababaabababaababa";
     let chars = CharOperator::new(universe);
     let solutions = find_solutions(&form, &chars);
-    print_assignments(&solutions, universe);
+    print_assignments(&solutions, universe, universe.len());
     println!("Time taken: {:.2}s", t1.elapsed().as_secs_f32());
 }

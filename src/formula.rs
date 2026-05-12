@@ -1,5 +1,4 @@
 use crate::assignment::Assignment;
-use crate::print_assignments;
 use crate::strutils::CharOperator;
 use itertools::Itertools;
 use std::collections::HashSet;
@@ -752,7 +751,7 @@ fn test_new_eq_solver() {
         ],
         "",
     );
-    print_assignments(&sols, lhs_assignment);
+    crate::print_assignments(&sols, lhs_assignment, lhs_assignment.len());
 
     let lhs_assignment = "cdababe";
     let sols = partial_assignments_for_equation(
@@ -767,7 +766,7 @@ fn test_new_eq_solver() {
         ],
         "",
     );
-    print_assignments(&sols, lhs_assignment);
+    crate::print_assignments(&sols, lhs_assignment, lhs_assignment.len());
 }
 
 fn partition_string<'a>(string: &CharOperator<'a>, num_vars: usize) -> Vec<Vec<&'a str>> {
