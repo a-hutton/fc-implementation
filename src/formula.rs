@@ -3,7 +3,6 @@ use crate::print_assignments;
 use crate::strutils::CharOperator;
 use itertools::Itertools;
 use std::collections::HashSet;
-use std::ops::Deref;
 
 pub const UNIVERSE_CONSTANT: &str = "$U";
 
@@ -88,38 +87,12 @@ impl<'a> Formula<'a> {
                         true
                     }
                     Quantifier::Existential => {
-                        // Heuristic: solving for the common pattern "exists p, s : x = p y s" (y is not in x)
-                        if let Formula::Quantifier {
-                            var: var2,
-                            inner: inner2,
-                            quantifier: quan2,
-                        } = inner.deref()
-                        {
-                            // TODO - allow for more inner formula types, and smarter equations too
-                            if let Formula::Equation { lhs, rhs } = inner2.deref()
-                                && rhs.len() == 3
-                                && let EquationContent::Variable(first_var) = rhs[0]
-                                && let EquationContent::Variable(needle_var) = rhs[1]
-                                && let EquationContent::Variable(last_var) = rhs[rhs.len() - 1]
-                                && first_var == *var
-                                && last_var == *var2
-                            {
-                                return assignment
-                                    .value(lhs)
-                                    .contains(assignment.value(needle_var));
-                            }
-                            if let Formula::Equation { lhs, rhs } = inner2.deref()
-                                && rhs.len() == 3
-                                && let EquationContent::Variable(first_var) = rhs[0]
-                                && let EquationContent::Constant(needle_val) = rhs[1]
-                                && let EquationContent::Variable(last_var) = rhs[rhs.len() - 1]
-                                && first_var == *var
-                                && last_var == *var2
-                            {
-                                return assignment.value(lhs).contains(needle_val);
-                            }
+                        // Try to use the partial assignment to quickly check if a full assignment involving
+                        // the bound variable can be found
+                        if let Some(is_satisfying) = self.partially_satisfies(assignment) {
+                            return is_satisfying;
                         }
-
+                        println!("Existential fragment being brute-forced");
                         // 'Brute force' search for all possible values of the bound variable
                         for factor in w.generate_factors() {
                             altered_assignment.insert(var, factor);
@@ -371,7 +344,11 @@ impl<'a> Formula<'a> {
         }
     }
 
-    fn make_partial_assignment_satisfying(&self, partial: Assignment) {
+    /// Determines whether an assignment that is missing values could have values added that
+    /// Satisfy the formula. Used in determining if an assignment to free vars of a quantified
+    /// formula can satisfy the formula without enumerating all values for the bound variable.
+    /// Currently only works for equations and existential quantifiers
+    fn partially_satisfies(&self, partial: &Assignment) -> Option<bool> {
         enum TempEquationContent {
             NewConstant(String),
             Variable(String),
@@ -443,17 +420,31 @@ impl<'a> Formula<'a> {
                     "Content: {:?}\nlhs value: {}",
                     equation_content, lhs_assignment
                 );
-                println!("Assignments: {:?}", full_assignments)
+                Some(!full_assignments.is_empty())
             }
-            Formula::Negation { .. } => {}
-            Formula::Conjunction { .. } => {}
-            Formula::Disjunction { .. } => {}
+            Formula::Negation { .. } => {
+                println!("Cannot currently optimise for Negation");
+                None
+            }
+            Formula::Conjunction { .. } => {
+                println!("Cannot currently optimise for Conjunction");
+                None
+            }
+            Formula::Disjunction { .. } => {
+                println!("Cannot currently optimise for Disjunction");
+                None
+            }
             Formula::Quantifier {
                 inner,
-                var,
+                var: _var,
                 quantifier,
             } => {
-                inner.make_partial_assignment_satisfying(partial);
+                if matches!(quantifier, Quantifier::Existential) {
+                    inner.partially_satisfies(partial)
+                } else {
+                    println!("Cannot currently optimise for 'For all'");
+                    None
+                }
             }
         }
     }
@@ -475,7 +466,7 @@ fn combine_into_string(range: &[EquationContent], partial: &Assignment) -> Strin
             }
         }
     }
-    return new_const;
+    new_const
 }
 
 #[test]
@@ -499,7 +490,7 @@ fn test_partial_assignment_satisfying() {
     let universe = "abababababaaaaabb";
     let mut assignment = Assignment::new(5, universe);
     assignment.insert("x", "baaaaabb");
-    formula.make_partial_assignment_satisfying(assignment);
+    assert!(formula.partially_satisfies(&assignment).unwrap());
 }
 
 fn trim_equation_rhs<'a, 'b>(
