@@ -184,10 +184,12 @@ fn print_assignments(assignments: &Vec<Assignment>, universe: &str, column_width
     let mut count = 0;
     for assignment in assignments {
         for i in 0..assignment.keys.len() {
-            let val = if assignment.values[i].is_empty() {
+            let val = assignment.values[i].replace("\n", "\\n");
+            let val = val.replace("\t", "\\t");
+            let val = if val.is_empty() {
                 CharOperator::new("ε")
             } else {
-                CharOperator::new(assignment.values[i])
+                CharOperator::new(val.as_str())
             };
             let val = if val.len() > column_width - 3 {
                 String::from(val.substring(0, column_width - 3)) + "..."
