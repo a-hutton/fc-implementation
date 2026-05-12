@@ -192,7 +192,7 @@ impl<'a> Formula<'a> {
                                 assignment.insert(lhs, lhs_value);
                                 assignment
                             })
-                            .filter(|assignment| assignment.apply(rhs).join("") == lhs_value)
+                            .filter(|assignment| assignment.apply(rhs).join("") == *lhs_value)
                             .collect_vec();
                         all_assignments.extend(assignments_for_lhs_value);
                     }
