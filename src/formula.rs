@@ -3,6 +3,7 @@ use crate::print_assignments;
 use crate::strutils::CharOperator;
 use itertools::Itertools;
 use std::collections::HashSet;
+use std::ops::Deref;
 
 pub const UNIVERSE_CONSTANT: &str = "$U";
 
@@ -87,6 +88,39 @@ impl<'a> Formula<'a> {
                         true
                     }
                     Quantifier::Existential => {
+                        // Heuristic: solving for the common pattern "exists p, s : x = p y s" (y is not in x)
+                        if let Formula::Quantifier {
+                            var: var2,
+                            inner: inner2,
+                            quantifier: quan2,
+                        } = inner.deref()
+                        {
+                            // TODO - allow for more inner formula types, and smarter equations too
+                            if let Formula::Equation { lhs, rhs } = inner2.deref()
+                                && rhs.len() == 3
+                                && let EquationContent::Variable(first_var) = rhs[0]
+                                && let EquationContent::Variable(needle_var) = rhs[1]
+                                && let EquationContent::Variable(last_var) = rhs[rhs.len() - 1]
+                                && first_var == *var
+                                && last_var == *var2
+                            {
+                                return assignment
+                                    .value(lhs)
+                                    .contains(assignment.value(needle_var));
+                            }
+                            if let Formula::Equation { lhs, rhs } = inner2.deref()
+                                && rhs.len() == 3
+                                && let EquationContent::Variable(first_var) = rhs[0]
+                                && let EquationContent::Constant(needle_val) = rhs[1]
+                                && let EquationContent::Variable(last_var) = rhs[rhs.len() - 1]
+                                && first_var == *var
+                                && last_var == *var2
+                            {
+                                return assignment.value(lhs).contains(needle_val);
+                            }
+                        }
+
+                        // 'Brute force' search for all possible values of the bound variable
                         for factor in w.generate_factors() {
                             altered_assignment.insert(var, factor);
                             let holds = inner.is_satisfying_assignment(w, &altered_assignment);
