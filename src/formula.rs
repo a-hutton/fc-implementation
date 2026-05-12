@@ -416,10 +416,6 @@ impl<'a> Formula<'a> {
                     equation_content,
                     partial.universe_constant,
                 );
-                println!(
-                    "Content: {:?}\nlhs value: {}",
-                    equation_content, lhs_assignment
-                );
                 Some(!full_assignments.is_empty())
             }
             Formula::Negation { .. } => {
