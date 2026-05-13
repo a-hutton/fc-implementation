@@ -30,10 +30,10 @@ fn main() {
     match args.command {
         ProgramCommand::GenerateFactors => {
             // Generate factors only
-            let factors = text_chars.generate_factors();
             if args.quiet {
-                println!("Generated {:?} Factors", factors.try_len());
+                println!("Generated {:?} Factors", text_chars.count_factors());
             } else {
+                let factors = text_chars.generate_factors();
                 for factor in factors {
                     println!("{}", factor);
                 }
