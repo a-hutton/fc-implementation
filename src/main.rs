@@ -133,7 +133,7 @@ struct Args {
     #[arg(short, long, required_if_eq("command", "check-assignment"))]
     assignment: Option<Vec<String>>,
     /// Maximum width of the displayed columns of assignments
-    #[arg(short, long, default_value_t = 30)]
+    #[arg(long, default_value_t = 30)]
     column_width: usize,
 }
 
