@@ -132,7 +132,7 @@ struct Args {
     #[arg(short, long, required_if_eq("command", "check-assignment"))]
     assignment: Option<Vec<String>>,
     /// Maximum width of the displayed columns of assignments
-    #[arg(short, long, default_value_t = 30)]
+    #[arg(long, default_value_t = 30)]
     column_width: usize,
 }
 
@@ -191,7 +191,7 @@ fn print_assignments(assignments: &Vec<Assignment>, universe: &str, column_width
             } else {
                 CharOperator::new(val.as_str())
             };
-            let val = if val.len() > column_width - 3 {
+            let val = if val.len() > column_width {
                 String::from(val.substring(0, column_width - 3)) + "..."
             } else {
                 String::from(val.as_str())
