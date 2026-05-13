@@ -1,12 +1,10 @@
 use itertools::Itertools;
-use std::cell::OnceCell;
 use unicode_normalization::UnicodeNormalization;
 
 pub struct CharOperator<'a> {
     string: &'a str,
     char_byte_indices: Vec<usize>,
     len: usize,
-    factors: OnceCell<Vec<&'a str>>,
 }
 
 impl<'a> CharOperator<'a> {
@@ -16,7 +14,6 @@ impl<'a> CharOperator<'a> {
                 string,
                 char_byte_indices: vec![],
                 len: 0,
-                factors: OnceCell::new(),
             };
         };
 
@@ -66,7 +63,6 @@ impl<'a> CharOperator<'a> {
             string,
             char_byte_indices: sizes,
             len: char_count,
-            factors: OnceCell::new(),
         }
     }
 
@@ -164,22 +160,43 @@ impl<'a> CharOperator<'a> {
         }
     }
 
-    pub fn generate_factors(&self) -> &Vec<&str> {
-        self.factors.get_or_init(|| {
-            let suffix_array = self.suffix_array();
-            let lcp_array = self.lcp_array(&suffix_array);
-            // TODO - max capacity is 0.5 * n * (n+1) + 1
-            let mut factors = Vec::new();
-            for i in 0..suffix_array.len() {
-                let suffix_len = self.len - suffix_array[i];
-                // Skip the first lcp_array[i] prefixes, as these are duplicates
-                for j in lcp_array[i]..suffix_len {
-                    factors.push(self.substring(suffix_array[i], suffix_array[i] + j + 1));
-                }
+    pub fn generate_factors(&self) -> impl Iterator<Item = &str> {
+        let suffix_array = self.suffix_array();
+        let lcp_array = self.lcp_array(&suffix_array);
+        let mut i = 0;
+        let mut j = 0;
+        let mut first = true;
+        std::iter::from_fn(move || {
+            let suffix_len = self.len - suffix_array[i];
+            if first {
+                first = false;
+                j = lcp_array[i];
+                return Some("");
             }
-            factors.push("");
-            factors
+            if j >= suffix_len {
+                i += 1;
+                if i >= suffix_array.len() {
+                    return None;
+                }
+                j = lcp_array[i];
+            }
+
+            let start_pos = suffix_array[i];
+            let end_pos = suffix_array[i] + j + 1;
+            j += 1;
+            let val = Some(self.substring(start_pos, end_pos));
+
+            return val;
         })
+    }
+
+    pub fn count_factors(&self) -> usize {
+        let mut counter = 0;
+        let mut iter = self.generate_factors();
+        while iter.next().is_some() {
+            counter += 1;
+        }
+        counter
     }
 }
 

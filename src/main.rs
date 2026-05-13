@@ -8,6 +8,7 @@ use crate::assignment::Assignment;
 use crate::formula::Formula;
 use crate::strutils::{unicode_normalise, CharOperator};
 use clap::Parser;
+use itertools::Itertools;
 use std::fs;
 
 fn main() {
@@ -31,7 +32,7 @@ fn main() {
             // Generate factors only
             let factors = text_chars.generate_factors();
             if args.quiet {
-                println!("Generated {} Factors", factors.len());
+                println!("Generated {:?} Factors", factors.try_len());
             } else {
                 for factor in factors {
                     println!("{}", factor);
@@ -191,7 +192,7 @@ fn print_assignments(assignments: &Vec<Assignment>, universe: &str, column_width
             } else {
                 CharOperator::new(val.as_str())
             };
-            let val = if val.len() > column_width - 3 {
+            let val = if val.len() > column_width {
                 String::from(val.substring(0, column_width - 3)) + "..."
             } else {
                 String::from(val.as_str())

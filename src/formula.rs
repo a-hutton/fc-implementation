@@ -208,7 +208,7 @@ impl<'a> Formula<'a> {
             Formula::Negation { inner } => {
                 println!("Using negation without a guard (B && ¬A) may take exponentially long");
                 // This is brute force
-                let universe = w.generate_factors();
+                let universe = w.generate_factors().collect_vec();
                 let free_vars = inner.free_vars();
                 let values =
                     std::iter::repeat_n(universe, free_vars.len()).multi_cartesian_product();
@@ -238,7 +238,6 @@ impl<'a> Formula<'a> {
                     }
                 }
                 let unseen_vars = unseen_vars.into_iter().collect_vec();
-                let universe = w.generate_factors();
 
                 if unseen_vars.is_empty() {
                     first_assignments
@@ -255,6 +254,7 @@ impl<'a> Formula<'a> {
                 } else {
                     let mut satisfying_assignments = Vec::new();
                     for assignment in &first_assignments {
+                        let universe = w.generate_factors().collect_vec();
                         let modified_assignments =
                             Assignment::extend_with_universe(assignment, &unseen_vars, &universe);
 
@@ -277,7 +277,6 @@ impl<'a> Formula<'a> {
             Formula::Disjunction { fragments } => {
                 let free_vars: HashSet<&str> = HashSet::from_iter(self.free_vars());
                 let mut satisfying_assignments = HashSet::new();
-                let universe = w.generate_factors();
                 for fragment in fragments {
                     let fragment_vars = HashSet::from_iter(fragment.free_vars());
                     let missing_fragment_vars =
@@ -288,6 +287,8 @@ impl<'a> Formula<'a> {
                         if missing_fragment_vars.is_empty() {
                             extended_fragment_sat_assignments.push(assignment);
                         } else {
+                            let universe = w.generate_factors();
+                            let universe = universe.collect_vec();
                             let mutated_assignments = Assignment::extend_with_universe(
                                 &assignment,
                                 &missing_fragment_vars,
@@ -315,7 +316,8 @@ impl<'a> Formula<'a> {
                         let val = solution.value(var);
                         var_values.insert(val);
                     }
-                    if var_values.len() != w.generate_factors().len() {
+                    let num_factors = w.count_factors();
+                    if var_values.len() != num_factors {
                         return vec![];
                     }
                     inner_solutions
