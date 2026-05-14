@@ -677,7 +677,7 @@ fn equation_assignments<'a>(
         };
         let var_sequence = &variables[var_sequence_start_idx..var_sequence_end_idx];
         let possible_end_indices = if i == variable_sequence_indices.len() - 1 {
-            &vec![lhs_assignment.len()]
+            &vec![lhs_chars.len()]
         } else {
             let (_, indices) = &const_positions[i];
             indices
