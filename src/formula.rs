@@ -225,10 +225,6 @@ impl<'a> Formula<'a> {
                     .collect_vec()
             }
             Formula::Conjunction { fragments } => {
-                // let all_solutions = fragments.iter().map(|f| f.all_solutions(w)).collect_vec();
-                // let solutions = find_all_joins(&all_solutions);
-                // return solutions;
-
                 let non_negations = fragments
                     .iter()
                     .filter(|f| !matches!(f, Formula::Negation { .. }))
@@ -264,36 +260,69 @@ impl<'a> Formula<'a> {
                     if negations.is_empty() {
                         sub_solutions
                     } else {
-                        // Filter out assignments that do not satisfy the negation portion
-                        let mut assignments = Vec::with_capacity(sub_solutions.len());
                         let universe = w.generate_factors();
-                        for assignment in &sub_solutions {
-                            let mut satisfies_negation = true;
-                            for formula in &negations {
-                                let missing_vars = formula
-                                    .free_vars()
-                                    .into_iter()
-                                    .filter(|var| !assignment.keys.contains(var))
-                                    .collect_vec();
-                                let modified_assignments = Assignment::extend_with_universe(
-                                    assignment,
-                                    &missing_vars,
-                                    &universe,
-                                );
-                                if modified_assignments
-                                    .iter()
-                                    .any(|a| !formula.is_satisfying_assignment(w, a))
-                                {
-                                    satisfies_negation = false;
-                                    break;
+                        let mut unseen_vars = HashSet::new();
+                        for fragment in &fragments[1..] {
+                            let fragment_vars = fragment.free_vars();
+                            for var in fragment_vars {
+                                if !sub_solutions[0].keys.contains(&var) {
+                                    unseen_vars.insert(var);
                                 }
                             }
-                            if satisfies_negation {
-                                assignments.push(assignment.clone())
-                            }
                         }
+                        let unseen_vars = unseen_vars.into_iter().collect_vec();
+                        let mut satisfying_assignments = Vec::new();
+                        for assignment in &sub_solutions {
+                            let modified_assignments = Assignment::extend_with_universe(
+                                assignment,
+                                &unseen_vars,
+                                &universe,
+                            );
 
-                        assignments
+                            let satisfying_modified_assignments = modified_assignments
+                                .into_iter()
+                                .filter(|assignment| {
+                                    for fragment in &fragments[1..] {
+                                        if !fragment.is_satisfying_assignment(w, assignment) {
+                                            return false;
+                                        }
+                                    }
+                                    true
+                                })
+                                .collect_vec();
+                            satisfying_assignments.extend(satisfying_modified_assignments);
+                        }
+                        satisfying_assignments
+                        // Filter out assignments that do not satisfy the negation portion
+                        // let mut assignments = Vec::with_capacity(sub_solutions.len());
+                        // let universe = w.generate_factors();
+                        // for assignment in &sub_solutions {
+                        //     let mut satisfies_negation = true;
+                        //     for formula in &negations {
+                        //         let missing_vars = formula
+                        //             .free_vars()
+                        //             .into_iter()
+                        //             .filter(|var| !assignment.keys.contains(var))
+                        //             .collect_vec();
+                        //         let modified_assignments = Assignment::extend_with_universe(
+                        //             assignment,
+                        //             &missing_vars,
+                        //             &universe,
+                        //         );
+                        //         if modified_assignments
+                        //             .iter()
+                        //             .any(|a| !formula.is_satisfying_assignment(w, a))
+                        //         {
+                        //             satisfies_negation = false;
+                        //             break;
+                        //         }
+                        //     }
+                        //     if satisfies_negation {
+                        //         assignments.push(assignment.clone())
+                        //     }
+                        // }
+                        //
+                        // assignments
                     }
                 }
             }

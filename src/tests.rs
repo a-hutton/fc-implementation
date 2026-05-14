@@ -361,7 +361,7 @@ fn minimal_index_exception_test() {
             formula: r#"x = "a" && ¬y = x"#,
             universe: "aa",
             should_fail: false,
-            num_solutions: 3,
+            num_solutions: 2,
         },
         SolutionTestCase {
             formula: r#"exists p(x = "a" && ¬ exists y( y = p))"#,
