@@ -350,12 +350,26 @@ fn tests_from_literature() {
 
 #[test]
 fn minimal_index_exception_test() {
-    let cases = [SolutionTestCase {
-        formula: r#"exists p(x = "a" && ¬ exists y( y = p))"#,
-        universe: "aa",
-        should_fail: false,
-        num_solutions: 0,
-    }];
+    let cases = [
+        SolutionTestCase {
+            formula: r#"x = "a" && ¬x = y"#,
+            universe: "aa",
+            should_fail: false,
+            num_solutions: 2,
+        },
+        SolutionTestCase {
+            formula: r#"x = "a" && ¬y = x"#,
+            universe: "aa",
+            should_fail: false,
+            num_solutions: 3,
+        },
+        SolutionTestCase {
+            formula: r#"exists p(x = "a" && ¬ exists y( y = p))"#,
+            universe: "aa",
+            should_fail: false,
+            num_solutions: 0,
+        },
+    ];
     test_case_runner(&cases);
 }
 

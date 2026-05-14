@@ -92,7 +92,7 @@ impl<'a> Formula<'a> {
                         if let Some(is_satisfying) = self.partially_satisfies(assignment) {
                             return is_satisfying;
                         }
-                        println!("Existential fragment being brute-forced");
+                        // println!("Existential fragment being brute-forced");
                         // 'Brute force' search for all possible values of the bound variable
                         for factor in w.generate_factors() {
                             altered_assignment.insert(var, factor);
@@ -266,10 +266,24 @@ impl<'a> Formula<'a> {
                     } else {
                         // Filter out assignments that do not satisfy the negation portion
                         let mut assignments = Vec::with_capacity(sub_solutions.len());
+                        let universe = w.generate_factors();
                         for assignment in &sub_solutions {
                             let mut satisfies_negation = true;
                             for formula in &negations {
-                                if !formula.is_satisfying_assignment(w, assignment) {
+                                let missing_vars = formula
+                                    .free_vars()
+                                    .into_iter()
+                                    .filter(|var| !assignment.keys.contains(var))
+                                    .collect_vec();
+                                let modified_assignments = Assignment::extend_with_universe(
+                                    assignment,
+                                    &missing_vars,
+                                    &universe,
+                                );
+                                if modified_assignments
+                                    .iter()
+                                    .any(|a| !formula.is_satisfying_assignment(w, a))
+                                {
                                     satisfies_negation = false;
                                     break;
                                 }
@@ -377,7 +391,7 @@ impl<'a> Formula<'a> {
 
                 // there is no variable missing from the assignment
                 if bound_var_occurrences.is_empty() {
-                    // return partial;
+                    return Some(true);
                 }
 
                 let lhs_assignment = partial.value(lhs);
@@ -426,15 +440,15 @@ impl<'a> Formula<'a> {
                 Some(!full_assignments.is_empty())
             }
             Formula::Negation { .. } => {
-                println!("Cannot currently optimise for Negation");
+                // println!("Cannot currently optimise for Negation");
                 None
             }
             Formula::Conjunction { .. } => {
-                println!("Cannot currently optimise for Conjunction");
+                // println!("Cannot currently optimise for Conjunction");
                 None
             }
             Formula::Disjunction { .. } => {
-                println!("Cannot currently optimise for Disjunction");
+                // println!("Cannot currently optimise for Disjunction");
                 None
             }
             Formula::Quantifier {
@@ -445,7 +459,7 @@ impl<'a> Formula<'a> {
                 if matches!(quantifier, Quantifier::Existential) {
                     inner.partially_satisfies(partial)
                 } else {
-                    println!("Cannot currently optimise for 'For all'");
+                    // println!("Cannot currently optimise for 'For all'");
                     None
                 }
             }
