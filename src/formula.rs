@@ -87,6 +87,13 @@ impl<'a> Formula<'a> {
                         true
                     }
                     Quantifier::Existential => {
+                        // Try to use the partial assignment to quickly check if a full assignment involving
+                        // the bound variable can be found
+                        if let Some(is_satisfying) = self.partially_satisfies(assignment) {
+                            return is_satisfying;
+                        }
+                        println!("Existential fragment being brute-forced");
+                        // 'Brute force' search for all possible values of the bound variable
                         for factor in w.generate_factors() {
                             altered_assignment.insert(var, factor);
                             let holds = inner.is_satisfying_assignment(w, &altered_assignment);
@@ -344,6 +351,149 @@ impl<'a> Formula<'a> {
             },
         }
     }
+    /// Determines whether an assignment that is missing values could have values added that
+    /// Satisfy the formula. Used in determining if an assignment to free vars of a quantified
+    /// formula can satisfy the formula without enumerating all values for the bound variable.
+    /// Currently only works for equations and existential quantifiers
+    fn partially_satisfies(&self, partial: &Assignment) -> Option<bool> {
+        enum TempEquationContent {
+            NewConstant(String),
+            Variable(String),
+        }
+        match self {
+            Formula::Equation { lhs, rhs } => {
+                // A new equation where all rhs variables that are in the partial assignment are replaced with their values as constants
+                let mut temp_equation_content = Vec::with_capacity(rhs.len());
+                let bound_var_occurrences = rhs
+                    .iter()
+                    .positions(|c| {
+                        if let EquationContent::Variable(var) = c {
+                            !partial.keys.contains(var)
+                        } else {
+                            false
+                        }
+                    })
+                    .collect_vec();
+
+                // there is no variable missing from the assignment
+                if bound_var_occurrences.is_empty() {
+                    // return partial;
+                }
+
+                let lhs_assignment = partial.value(lhs);
+
+                // Get name of missing variable
+                // Collect constants AND values of free variables as new constants
+                let mut i = 0;
+                for bound_var_idx in bound_var_occurrences {
+                    let new_const = combine_into_string(&rhs[i..bound_var_idx], &partial);
+                    temp_equation_content.push(TempEquationContent::NewConstant(new_const));
+                    let bound_var = &rhs[bound_var_idx];
+                    if let EquationContent::Variable(var) = bound_var {
+                        temp_equation_content
+                            .push(TempEquationContent::Variable(String::from(*var)));
+                        i = bound_var_idx + 1;
+                    } else {
+                        unreachable!();
+                    }
+                }
+                if i < rhs.len() {
+                    let last_const = combine_into_string(&rhs[i..], &partial);
+                    temp_equation_content.push(TempEquationContent::NewConstant(last_const));
+                }
+
+                // Map to normal system (keeping ownership)
+                let equation_content = temp_equation_content
+                    .iter()
+                    .map(|c| match c {
+                        TempEquationContent::NewConstant(val) => EquationContent::Constant(val),
+                        TempEquationContent::Variable(var) => EquationContent::Variable(var),
+                    })
+                    .collect_vec();
+                // Trim both sides of prefix/suffix consts
+                let (equation_content, pre, suf) = trim_equation_rhs(&equation_content);
+                let trimmed_lhs_assignment = lhs_assignment
+                    .strip_prefix(&pre)
+                    .unwrap()
+                    .strip_suffix(&suf)
+                    .unwrap();
+                // Solve like a 'normal' equation
+                let full_assignments = partial_assignments_for_equation(
+                    trimmed_lhs_assignment,
+                    equation_content,
+                    partial.universe_constant,
+                );
+                Some(!full_assignments.is_empty())
+            }
+            Formula::Negation { .. } => {
+                println!("Cannot currently optimise for Negation");
+                None
+            }
+            Formula::Conjunction { .. } => {
+                println!("Cannot currently optimise for Conjunction");
+                None
+            }
+            Formula::Disjunction { .. } => {
+                println!("Cannot currently optimise for Disjunction");
+                None
+            }
+            Formula::Quantifier {
+                inner,
+                var: _var,
+                quantifier,
+            } => {
+                if matches!(quantifier, Quantifier::Existential) {
+                    inner.partially_satisfies(partial)
+                } else {
+                    println!("Cannot currently optimise for 'For all'");
+                    None
+                }
+            }
+        }
+    }
+}
+
+fn combine_into_string(range: &[EquationContent], partial: &Assignment) -> String {
+    let mut new_const = String::new();
+    for p in range {
+        match p {
+            EquationContent::Variable(var) => {
+                new_const.push_str(partial.value(var));
+            }
+            EquationContent::Constant(val) => {
+                new_const.push_str(val);
+            }
+            EquationContent::UniverseConstant => {
+                println!("Universe word on right hand side of optimised equation");
+                new_const.push_str(partial.universe_constant);
+            }
+        }
+    }
+    new_const
+}
+
+#[test]
+fn test_partial_assignment_satisfying() {
+    let formula = Formula::Quantifier {
+        inner: Box::new(Formula::Quantifier {
+            inner: Box::new(Formula::Equation {
+                lhs: "x",
+                rhs: vec![
+                    EquationContent::Variable("p"),
+                    EquationContent::Constant("aaa"),
+                    EquationContent::Variable("s"),
+                ],
+            }),
+            var: "s",
+            quantifier: Quantifier::Existential,
+        }),
+        var: "p",
+        quantifier: Quantifier::Existential,
+    };
+    let universe = "abababababaaaaabb";
+    let mut assignment = Assignment::new(5, universe);
+    assignment.insert("x", "baaaaabb");
+    assert!(formula.partially_satisfies(&assignment).unwrap());
 }
 
 fn trim_equation_rhs<'a, 'b>(
