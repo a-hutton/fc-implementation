@@ -269,17 +269,10 @@ impl<'a> Formula<'a> {
                                 }
                             }
                         }
-                        let unseen_vars = unseen_vars.into_iter().collect_vec();
-                        let mut satisfying_assignments = Vec::new();
-                        let universe = w.generate_factors().collect_vec();
-                        for assignment in &sub_solutions {
-                            let modified_assignments = Assignment::extend_with_universe(
-                                assignment,
-                                &unseen_vars,
-                                &universe,
-                            );
 
-                            let satisfying_modified_assignments = modified_assignments
+                        let unseen_vars = unseen_vars.into_iter().collect_vec();
+                        if unseen_vars.is_empty() {
+                            sub_solutions
                                 .into_iter()
                                 .filter(|assignment| {
                                     for fragment in &fragments[1..] {
@@ -289,40 +282,32 @@ impl<'a> Formula<'a> {
                                     }
                                     true
                                 })
-                                .collect_vec();
-                            satisfying_assignments.extend(satisfying_modified_assignments);
+                                .collect_vec()
+                        } else {
+                            let mut satisfying_assignments = Vec::new();
+                            for assignment in &sub_solutions {
+                                let universe = w.generate_factors().collect_vec();
+                                let modified_assignments = Assignment::extend_with_universe(
+                                    assignment,
+                                    &unseen_vars,
+                                    &universe,
+                                );
+
+                                let satisfying_modified_assignments = modified_assignments
+                                    .into_iter()
+                                    .filter(|assignment| {
+                                        for fragment in &fragments[1..] {
+                                            if !fragment.is_satisfying_assignment(w, assignment) {
+                                                return false;
+                                            }
+                                        }
+                                        true
+                                    })
+                                    .collect_vec();
+                                satisfying_assignments.extend(satisfying_modified_assignments);
+                            }
+                            satisfying_assignments
                         }
-                        satisfying_assignments
-                        // Filter out assignments that do not satisfy the negation portion
-                        // let mut assignments = Vec::with_capacity(sub_solutions.len());
-                        // let universe = w.generate_factors();
-                        // for assignment in &sub_solutions {
-                        //     let mut satisfies_negation = true;
-                        //     for formula in &negations {
-                        //         let missing_vars = formula
-                        //             .free_vars()
-                        //             .into_iter()
-                        //             .filter(|var| !assignment.keys.contains(var))
-                        //             .collect_vec();
-                        //         let modified_assignments = Assignment::extend_with_universe(
-                        //             assignment,
-                        //             &missing_vars,
-                        //             &universe,
-                        //         );
-                        //         if modified_assignments
-                        //             .iter()
-                        //             .any(|a| !formula.is_satisfying_assignment(w, a))
-                        //         {
-                        //             satisfies_negation = false;
-                        //             break;
-                        //         }
-                        //     }
-                        //     if satisfies_negation {
-                        //         assignments.push(assignment.clone())
-                        //     }
-                        // }
-                        //
-                        // assignments
                     }
                 }
             }
