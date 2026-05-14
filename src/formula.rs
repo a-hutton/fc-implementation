@@ -253,8 +253,8 @@ impl<'a> Formula<'a> {
                         .collect_vec()
                 } else {
                     let mut satisfying_assignments = Vec::new();
+                    let universe = w.generate_factors().collect_vec();
                     for assignment in &first_assignments {
-                        let universe = w.generate_factors().collect_vec();
                         let modified_assignments =
                             Assignment::extend_with_universe(assignment, &unseen_vars, &universe);
 
