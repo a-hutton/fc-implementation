@@ -209,7 +209,7 @@ impl<'a> Formula<'a> {
             Formula::Negation { inner } => {
                 println!("Using negation without a guard (B && ¬A) may take exponentially long");
                 // This is brute force
-                let universe = w.generate_factors();
+                let universe = w.generate_factors().collect_vec();
                 let free_vars = inner.free_vars();
                 let values =
                     std::iter::repeat_n(universe, free_vars.len()).multi_cartesian_product();
@@ -260,7 +260,6 @@ impl<'a> Formula<'a> {
                     if negations.is_empty() {
                         sub_solutions
                     } else {
-                        let universe = w.generate_factors();
                         let mut unseen_vars = HashSet::new();
                         for fragment in &fragments[1..] {
                             let fragment_vars = fragment.free_vars();
@@ -272,6 +271,7 @@ impl<'a> Formula<'a> {
                         }
                         let unseen_vars = unseen_vars.into_iter().collect_vec();
                         let mut satisfying_assignments = Vec::new();
+                        let universe = w.generate_factors().collect_vec();
                         for assignment in &sub_solutions {
                             let modified_assignments = Assignment::extend_with_universe(
                                 assignment,
@@ -329,7 +329,7 @@ impl<'a> Formula<'a> {
             Formula::Disjunction { fragments } => {
                 let free_vars: HashSet<&str> = HashSet::from_iter(self.free_vars());
                 let mut satisfying_assignments = HashSet::new();
-                let universe = w.generate_factors();
+                let universe = w.generate_factors().collect_vec();
                 for fragment in fragments {
                     let fragment_vars = HashSet::from_iter(fragment.free_vars());
                     let missing_fragment_vars =
@@ -367,7 +367,7 @@ impl<'a> Formula<'a> {
                         let val = solution.value(var);
                         var_values.insert(val);
                     }
-                    if var_values.len() != w.generate_factors().len() {
+                    if var_values.len() != w.count_factors() {
                         return vec![];
                     }
                     inner_solutions
