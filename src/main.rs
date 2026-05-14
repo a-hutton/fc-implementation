@@ -49,7 +49,7 @@ fn main() {
                     let solutions = find_solutions(&parsed_formula, &text_chars);
                     println!("Found {} solutions", solutions.len());
                     if !args.quiet {
-                        print_assignments(&solutions, text.as_str());
+                        print_assignments(&solutions, text.as_str(), args.column_width);
                     }
                 }
             }
@@ -131,11 +131,14 @@ struct Args {
     /// An assignment to be verified (if command = check-assignment). Formatted as '<VAR_NAME>:<ASSIGNMENT_STRING>'
     #[arg(short, long, required_if_eq("command", "check-assignment"))]
     assignment: Option<Vec<String>>,
+    /// Maximum width of the displayed columns of assignments
+    #[arg(long, default_value_t = 30)]
+    column_width: usize,
 }
 
 #[derive(clap::Args, Clone, Debug)]
 #[group(required = true, multiple = false)]
-/// Uses clap to require at least one of these, but no more than one.
+// Uses clap to require at least one of these, but no more than one.
 struct TextOption {
     /// The text universe the search is applied to. Mutually exclusive with --text
     #[arg(short, long, required_unless_present = "file")]
@@ -162,19 +165,16 @@ fn find_solutions<'a>(formula: &'a Formula, word: &'a CharOperator) -> Vec<Assig
 }
 
 /// Prints to stdout a pretty-printed CSV formatted table of all given assignments
-fn print_assignments(assignments: &Vec<Assignment>, universe: &str) -> usize {
+fn print_assignments(assignments: &Vec<Assignment>, universe: &str, column_width: usize) -> usize {
     if assignments.is_empty() {
         println!("No satisfying assignments found");
         return 0;
     }
 
-    // guaranteed to be the longest variable, helps for printing as a 'table'
-    let universe_len = strutils::count_chars(universe);
-
     let var_names = &assignments[0].keys;
     // print var names
     for (i, var_name) in var_names.iter().enumerate() {
-        print!("{var:width$}", var = var_name, width = universe_len);
+        print!("{var:width$}", var = var_name, width = column_width);
         if i < var_names.len() - 1 {
             print!(", ")
         }
@@ -184,12 +184,19 @@ fn print_assignments(assignments: &Vec<Assignment>, universe: &str) -> usize {
     let mut count = 0;
     for assignment in assignments {
         for i in 0..assignment.keys.len() {
-            let val = if assignment.values[i].is_empty() {
-                "ε"
+            let val = assignment.values[i].replace("\n", "\\n");
+            let val = val.replace("\t", "\\t");
+            let val = if val.is_empty() {
+                CharOperator::new("ε")
             } else {
-                assignment.values[i]
+                CharOperator::new(val.as_str())
             };
-            print!("{val:width$}", val = val, width = universe_len);
+            let val = if val.len() > column_width {
+                String::from(val.substring(0, column_width - 3)) + "..."
+            } else {
+                String::from(val.as_str())
+            };
+            print!("{val:width$}", val = val, width = column_width);
             if i < var_names.len() - 1 {
                 print!(", ")
             }
