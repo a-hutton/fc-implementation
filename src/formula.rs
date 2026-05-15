@@ -277,6 +277,8 @@ impl<'a> Formula<'a> {
             Formula::Disjunction { fragments } => {
                 let free_vars: HashSet<&str> = HashSet::from_iter(self.free_vars());
                 let mut satisfying_assignments = HashSet::new();
+                let universe = w.generate_factors();
+                let universe = universe.collect_vec();
                 for fragment in fragments {
                     let fragment_vars = HashSet::from_iter(fragment.free_vars());
                     let missing_fragment_vars =
@@ -287,8 +289,6 @@ impl<'a> Formula<'a> {
                         if missing_fragment_vars.is_empty() {
                             extended_fragment_sat_assignments.push(assignment);
                         } else {
-                            let universe = w.generate_factors();
-                            let universe = universe.collect_vec();
                             let mutated_assignments = Assignment::extend_with_universe(
                                 &assignment,
                                 &missing_fragment_vars,
