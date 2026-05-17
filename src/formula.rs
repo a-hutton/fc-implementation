@@ -260,8 +260,11 @@ impl<'a> Formula<'a> {
                     if negations.is_empty() {
                         sub_solutions
                     } else {
+                        if sub_solutions.is_empty() {
+                            return sub_solutions;
+                        }
                         let mut unseen_vars = HashSet::new();
-                        for fragment in &fragments[1..] {
+                        for fragment in &negations {
                             let fragment_vars = fragment.free_vars();
                             for var in fragment_vars {
                                 if !sub_solutions[0].keys.contains(&var) {
@@ -275,7 +278,7 @@ impl<'a> Formula<'a> {
                             sub_solutions
                                 .into_iter()
                                 .filter(|assignment| {
-                                    for fragment in &fragments[1..] {
+                                    for fragment in &negations {
                                         if !fragment.is_satisfying_assignment(w, assignment) {
                                             return false;
                                         }
