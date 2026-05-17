@@ -207,7 +207,6 @@ impl<'a> Formula<'a> {
                 }
             }
             Formula::Negation { inner } => {
-                println!("Using negation without a guard (B && ¬A) may take exponentially long");
                 // This is brute force
                 let universe = w.generate_factors().collect_vec();
                 let free_vars = inner.free_vars();
@@ -705,11 +704,6 @@ fn equation_assignments<'a>(
                 let res = Assignment::join(assignment_a, assignment_b);
                 if let Ok(s) = res {
                     assignments.push(s);
-                } else {
-                    println!(
-                        "Didn't join assignments - conflicting values: {}",
-                        res.unwrap_err()
-                    )
                 }
             }
         }
