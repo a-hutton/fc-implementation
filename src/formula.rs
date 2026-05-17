@@ -419,18 +419,9 @@ impl<'a> Formula<'a> {
                 );
                 Some(!full_assignments.is_empty())
             }
-            Formula::Negation { .. } => {
-                println!("Cannot currently optimise for Negation");
-                None
-            }
-            Formula::Conjunction { .. } => {
-                println!("Cannot currently optimise for Conjunction");
-                None
-            }
-            Formula::Disjunction { .. } => {
-                println!("Cannot currently optimise for Disjunction");
-                None
-            }
+            Formula::Negation { .. } => None,
+            Formula::Conjunction { .. } => None,
+            Formula::Disjunction { .. } => None,
             Formula::Quantifier {
                 inner,
                 var: _var,
@@ -439,7 +430,6 @@ impl<'a> Formula<'a> {
                 if matches!(quantifier, Quantifier::Existential) {
                     inner.partially_satisfies(partial)
                 } else {
-                    println!("Cannot currently optimise for 'For all'");
                     None
                 }
             }
@@ -668,11 +658,6 @@ fn equation_assignments<'a>(
                 let res = Assignment::join(assignment_a, assignment_b);
                 if let Ok(s) = res {
                     assignments.push(s);
-                } else {
-                    println!(
-                        "Didn't join assignments - conflicting values: {}",
-                        res.unwrap_err()
-                    )
                 }
             }
         }
