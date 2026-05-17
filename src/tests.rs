@@ -1,7 +1,8 @@
 #![cfg(test)]
 
 use crate::formula_parser::parse_formula_str;
-use crate::{find_solutions, print_solutions};
+use crate::strutils::{unicode_normalise, CharOperator};
+use crate::{find_solutions, print_assignments};
 use std::time::Instant;
 
 #[derive(Copy, Clone)]
@@ -16,7 +17,7 @@ struct SolutionTestCase {
 /// Asserts that the predicted number of solutions matches the actual one on formulas in a given
 /// universe
 #[test]
-fn test_solutions() {
+fn test_equation_solutions() {
     let cases = [
         // Finding correct number of solutions
         SolutionTestCase {
@@ -26,71 +27,10 @@ fn test_solutions() {
             num_solutions: 15,
         },
         SolutionTestCase {
-            formula: r#"x = "a" y z && (¬y="" && ¬z="")"#,
-            universe: "aaab",
-            should_fail: false,
-            num_solutions: 4,
-        },
-        SolutionTestCase {
             formula: r#"$U="aaa""#,
             universe: "aaa",
             should_fail: false,
             num_solutions: 1,
-        },
-        SolutionTestCase {
-            formula: r#"($U=x y && (x="a" && y=x))"#,
-            universe: "aa",
-            should_fail: false,
-            num_solutions: 1,
-        },
-        SolutionTestCase {
-            formula: r#"($U=x y && $U=x)"#,
-            universe: "aa",
-            should_fail: false,
-            num_solutions: 1,
-        },
-        SolutionTestCase {
-            formula: r#"($U = "a" y z &&  z="b")"#,
-            universe: "aaab",
-            should_fail: false,
-            num_solutions: 1,
-        },
-        SolutionTestCase {
-            formula: r#"x = "a" y z && (x=$U && z="b")"#,
-            universe: "aaab",
-            should_fail: false,
-            num_solutions: 1,
-        },
-        SolutionTestCase {
-            formula: r#"¬((x="" || x="ab") || (x="a" || x="b"))"#,
-            universe: "ab",
-            should_fail: false,
-            num_solutions: 0,
-        },
-        // Existential Quantifier
-        SolutionTestCase {
-            formula: r#"∃x $U = x x"#,
-            universe: "abbabb",
-            should_fail: false,
-            num_solutions: 1,
-        },
-        SolutionTestCase {
-            formula: r#"∃ x($U=x x)"#,
-            universe: "abbcabb",
-            should_fail: false,
-            num_solutions: 0,
-        },
-        SolutionTestCase {
-            formula: r#"X="a" || X="aa""#,
-            universe: "aa",
-            should_fail: false,
-            num_solutions: 2,
-        },
-        SolutionTestCase {
-            formula: r#"forall x (x="a")"#,
-            universe: "aa",
-            should_fail: false,
-            num_solutions: 0,
         },
         // remove duplicate factors from universe
         SolutionTestCase {
@@ -105,13 +45,46 @@ fn test_solutions() {
             should_fail: true,
             num_solutions: 1,
         },
-        // variables with names in alphabet
+        // No matches
         SolutionTestCase {
-            formula: r#"(a="b"b && b="a")"#,
-            universe: "ba",
+            formula: r#"x=x"a""#,
+            universe: "aaaaa",
+            should_fail: false,
+            num_solutions: 0,
+        },
+        // Unicode
+        SolutionTestCase {
+            formula: r#"x=y "a""#,
+            universe: "ïa",
+            should_fail: false,
+            num_solutions: 2,
+        },
+        SolutionTestCase {
+            formula: r#"x=y "a""#,
+            universe: "æéɷa",
+            should_fail: false,
+            num_solutions: 4,
+        },
+        // Edge case - lhs assignment has prefix and suffix, but they overlap
+        SolutionTestCase {
+            formula: r#"x= "a" y "a""#,
+            universe: "aa",
             should_fail: false,
             num_solutions: 1,
         },
+        SolutionTestCase {
+            formula: r#"x= "ab" y "b""#,
+            universe: "abb",
+            should_fail: false,
+            num_solutions: 1,
+        },
+    ];
+    test_case_runner(&cases);
+}
+
+#[test]
+fn test_syntax_parsing() {
+    let cases = [
         // Syntax Errors
         SolutionTestCase {
             formula: r#"(x = "a" y z && (x=$U && z="b")"#,
@@ -137,18 +110,48 @@ fn test_solutions() {
             should_fail: true,
             num_solutions: 0,
         },
-        // No matches
+    ];
+    test_case_runner(&cases);
+}
+
+#[test]
+fn test_conjunction() {
+    let cases = [
         SolutionTestCase {
-            formula: r#"¬$U=$U"#,
-            universe: "aaaaa",
+            formula: r#"x = "a" y z && (¬y="" && ¬z="")"#,
+            universe: "aaab",
             should_fail: false,
-            num_solutions: 0,
+            num_solutions: 4,
         },
         SolutionTestCase {
-            formula: r#"x=x"a""#,
-            universe: "aaaaa",
+            formula: r#"x = "aabb" && y = x "a""#,
+            universe: "bbaabbabb",
             should_fail: false,
-            num_solutions: 0,
+            num_solutions: 1,
+        },
+        SolutionTestCase {
+            formula: r#"($U=x y && (x="a" && y=x))"#,
+            universe: "aa",
+            should_fail: false,
+            num_solutions: 1,
+        },
+        SolutionTestCase {
+            formula: r#"($U=x y && $U=x)"#,
+            universe: "aa",
+            should_fail: false,
+            num_solutions: 1,
+        },
+        SolutionTestCase {
+            formula: r#"($U = "a" y z &&  z="b")"#,
+            universe: "aaab",
+            should_fail: false,
+            num_solutions: 1,
+        },
+        SolutionTestCase {
+            formula: r#"x = "a" y z && x=$U && z="b""#,
+            universe: "aaab",
+            should_fail: false,
+            num_solutions: 1,
         },
         SolutionTestCase {
             formula: r#"x=y"aaa" && y="b""#,
@@ -156,30 +159,112 @@ fn test_solutions() {
             should_fail: false,
             num_solutions: 0,
         },
-        // Unicode
         SolutionTestCase {
-            formula: r#"x=y "a""#,
-            universe: "ïa",
+            formula: r#"$U="b" x"#,
+            universe: "baa",
+            should_fail: false,
+            num_solutions: 1,
+        },
+        // variables with names in alphabet
+        SolutionTestCase {
+            formula: r#"(a="b"b && b="a")"#,
+            universe: "ba",
+            should_fail: false,
+            num_solutions: 1,
+        },
+    ];
+    test_case_runner(&cases);
+}
+
+#[test]
+fn test_quantifiers() {
+    let cases = [
+        SolutionTestCase {
+            formula: r#"∃x $U = x x"#,
+            universe: "abbabb",
+            should_fail: false,
+            num_solutions: 1,
+        },
+        SolutionTestCase {
+            formula: r#"∃ x($U=x x)"#,
+            universe: "abbcabb",
+            should_fail: false,
+            num_solutions: 0,
+        },
+        SolutionTestCase {
+            formula: r#"forall x (x="a")"#,
+            universe: "aa",
+            should_fail: false,
+            num_solutions: 0,
+        },
+    ];
+    test_case_runner(&cases);
+}
+
+#[test]
+fn test_disjunction() {
+    let cases = [
+        SolutionTestCase {
+            formula: r#"X="a" || X="aa""#,
+            universe: "aa",
             should_fail: false,
             num_solutions: 2,
         },
         SolutionTestCase {
-            formula: r#"x=y "a""#,
-            universe: "æéɷa",
+            formula: r#"¬(x="" || x="ab" || x="a" || x="b")"#,
+            universe: "ab",
             should_fail: false,
-            num_solutions: 4,
+            num_solutions: 0,
+        },
+        SolutionTestCase {
+            formula: r#"X="a" || X="b""#,
+            universe: "aabab",
+            should_fail: false,
+            num_solutions: 2,
+        },
+        SolutionTestCase {
+            formula: r#"X="a" ||( X="b" || X = "ab")"#,
+            universe: "aabab",
+            should_fail: false,
+            num_solutions: 3,
+        },
+        SolutionTestCase {
+            formula: r#"x = y "a" z || z = "bbb""#,
+            universe: "cadbbb",
+            should_fail: false,
+            num_solutions: 371,
         },
     ];
+    test_case_runner(&cases);
+}
+
+#[test]
+fn test_negation() {
+    let cases = [SolutionTestCase {
+        formula: r#"¬$U=$U"#,
+        universe: "aaaaa",
+        should_fail: false,
+        num_solutions: 0,
+    }];
+    test_case_runner(&cases)
+}
+
+fn test_case_runner(cases: &[SolutionTestCase]) {
     for test in cases {
-        println!("Finding solutions for '{}'", test.formula);
+        println!(
+            "Finding solutions for '{}' on universe '{}'",
+            test.formula, test.universe
+        );
         let res = parse_formula_str(test.formula);
         match res {
             None => assert!(test.should_fail),
             Some(formula) => {
-                let solutions = find_solutions(&*formula, test.universe);
-                println!("Found {n} solutions", n = solutions.len());
-                print_solutions(&solutions, test.universe);
-                assert_eq!(solutions.len(), test.num_solutions);
+                let normalised = unicode_normalise(test.universe);
+                let w = CharOperator::new(normalised.as_str());
+                let solutions = find_solutions(&formula, &w);
+                let len = print_assignments(&solutions, test.universe, test.universe.len());
+                println!("Found {len} solutions");
+                assert_eq!(len, test.num_solutions);
             }
         }
         println!("-------- Test Passed --------\n")
@@ -238,6 +323,12 @@ fn tests_from_literature() {
             should_fail: false,
             num_solutions: 0,
         },
+        SolutionTestCase {
+            formula: r#"(∃ p(∃ s(x="bbb" && ¬∃ ph(∃ sh(($U=ph x sh ∧ $U=p x s ∧ ¬ph=p))))))"#,
+            universe: "ababbba",
+            should_fail: false,
+            num_solutions: 1,
+        },
         // Theory of Concatenation over Finite Models - Example 3.5
         // 'σ(x) occurs exactly once in w'
         SolutionTestCase {
@@ -254,20 +345,32 @@ fn tests_from_literature() {
         },
     ];
 
-    for test in cases {
-        println!("Finding solutions for '{}'", test.formula);
-        let res = parse_formula_str(test.formula);
-        match res {
-            None => assert!(test.should_fail),
-            Some(formula) => {
-                let solutions = find_solutions(&*formula, test.universe);
-                println!("Found {n} solutions", n = solutions.len());
-                print_solutions(&solutions, test.universe);
-                assert_eq!(solutions.len(), test.num_solutions);
-            }
-        }
-        println!("-------- Test Passed --------\n")
-    }
+    test_case_runner(&cases);
+}
+
+#[test]
+fn minimal_index_exception_test() {
+    let cases = [
+        SolutionTestCase {
+            formula: r#"x = "a" && ¬x = y"#,
+            universe: "aa",
+            should_fail: false,
+            num_solutions: 2,
+        },
+        SolutionTestCase {
+            formula: r#"x = "a" && ¬y = x"#,
+            universe: "aa",
+            should_fail: false,
+            num_solutions: 2,
+        },
+        SolutionTestCase {
+            formula: r#"exists p(x = "a" && ¬ exists y( y = p))"#,
+            universe: "aa",
+            should_fail: false,
+            num_solutions: 0,
+        },
+    ];
+    test_case_runner(&cases);
 }
 
 struct FreeVarTestCase {
@@ -301,7 +404,8 @@ fn difficult_test() {
     let t1 = Instant::now();
     let form = parse_formula_str(r#"Z=X"ab"Y && Z=Y"ba"X"#).unwrap();
     let universe = "ababaabababaababa";
-    let solutions = find_solutions(&*form, universe);
-    print_solutions(&solutions, universe);
+    let chars = CharOperator::new(universe);
+    let solutions = find_solutions(&form, &chars);
+    print_assignments(&solutions, universe, universe.len());
     println!("Time taken: {:.2}s", t1.elapsed().as_secs_f32());
 }

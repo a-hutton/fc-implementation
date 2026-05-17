@@ -1,6 +1,8 @@
-use crate::{generate_factors, Substitution};
-use std::fmt;
-use std::fmt::Formatter;
+use crate::assignment::{find_all_joins, Assignment};
+use crate::print_assignments;
+use crate::strutils::CharOperator;
+use itertools::Itertools;
+use std::collections::HashSet;
 
 pub const UNIVERSE_CONSTANT: &str = "$U";
 
@@ -10,339 +12,809 @@ pub const UNIVERSE_CONSTANT: &str = "$U";
 pub enum EquationContent<'a> {
     Variable(&'a str),
     Constant(&'a str),
+    UniverseConstant,
 }
 
-/// Applies a [`Substitution`] to a `Vec` of [`EquationContent`] - either variables or constants.
-/// Constants do not have their values changed, variables are given their respective values from
-/// the provided [`Substitution`]
-fn substitute<'a>(
-    terms: &Vec<EquationContent<'a>>,
-    substitution: &Substitution<'a>,
-) -> Vec<&'a str> {
-    let mut new_terms = Vec::with_capacity(terms.len());
-    for term in terms {
-        match term {
-            EquationContent::Variable(v) => {
-                if !substitution.contains_key(v) {
-                    panic!("No substitution for (free) variable {:?}", v);
-                }
-                let val = substitution[*v];
-                new_terms.push(val);
-            }
-            EquationContent::Constant(c) => {
-                new_terms.push(*c);
-            }
-        }
-    }
-    new_terms
-}
-
-/// A common interface for all word formula types
-pub trait Formula: fmt::Display + fmt::Debug {
-    fn free_vars(&self) -> Vec<&str>;
-    fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool;
-}
-
-/// An 'atomic' equation where the left hand side is a single variable, and the right hand side is
-/// a sequence of [`EquationContent`]: either variables or constants
 #[derive(Debug)]
-pub struct AtomicWordEquation<'a> {
-    lhs_variable: &'a str,
-    rhs: Vec<EquationContent<'a>>,
+pub enum Quantifier {
+    Universal,
+    Existential,
 }
 
-impl AtomicWordEquation<'_> {
-    pub fn new<'a>(lhs: &'a str, rhs: Vec<EquationContent<'a>>) -> AtomicWordEquation<'a> {
-        AtomicWordEquation {
-            lhs_variable: lhs,
-            rhs,
-        }
-    }
+#[derive(Debug)]
+pub enum Formula<'a> {
+    Equation {
+        lhs: &'a str,
+        rhs: Vec<EquationContent<'a>>,
+    },
+    Negation {
+        inner: Box<Formula<'a>>,
+    },
+    Conjunction {
+        fragments: Vec<Formula<'a>>,
+    },
+    Disjunction {
+        fragments: Vec<Formula<'a>>,
+    },
+    Quantifier {
+        inner: Box<Formula<'a>>,
+        var: &'a str,
+        quantifier: Quantifier,
+    },
 }
 
-impl<'a> Formula for AtomicWordEquation<'a> {
-    fn free_vars(&self) -> Vec<&'a str> {
-        let mut free = vec![];
-        if self.lhs_variable != UNIVERSE_CONSTANT {
-            free.push(self.lhs_variable);
-        }
-
-        for content in &self.rhs {
-            // if term is a free variable, add to vec if not already there
-            if let EquationContent::Variable(var) = content
-                && !free.contains(var)
-                && *var != UNIVERSE_CONSTANT
-            {
-                free.push(*var);
+impl<'a> Formula<'a> {
+    pub fn is_satisfying_assignment(&self, w: &CharOperator, assignment: &Assignment) -> bool {
+        match self {
+            Formula::Equation { lhs, rhs } => {
+                // TODO - must check that all values are in the universe
+                let lhs_value = assignment.value(lhs);
+                let rhs_value = assignment.apply(rhs).join("");
+                lhs_value == rhs_value
+            }
+            Formula::Negation { inner } => !inner.is_satisfying_assignment(w, assignment),
+            Formula::Conjunction { fragments } => {
+                for fragment in fragments {
+                    if !fragment.is_satisfying_assignment(w, assignment) {
+                        return false;
+                    }
+                }
+                true
+            }
+            Formula::Disjunction { fragments } => {
+                for fragment in fragments {
+                    if fragment.is_satisfying_assignment(w, assignment) {
+                        return true;
+                    }
+                }
+                false
+            }
+            Formula::Quantifier {
+                inner,
+                var,
+                quantifier,
+            } => {
+                let mut altered_assignment = assignment.clone();
+                match quantifier {
+                    Quantifier::Universal => {
+                        for factor in w.generate_factors() {
+                            altered_assignment.insert(var, factor);
+                            let holds = inner.is_satisfying_assignment(w, &altered_assignment);
+                            if holds {
+                                return false;
+                            }
+                        }
+                        true
+                    }
+                    Quantifier::Existential => {
+                        // Try to use the partial assignment to quickly check if a full assignment involving
+                        // the bound variable can be found
+                        if let Some(is_satisfying) = self.partially_satisfies(assignment) {
+                            return is_satisfying;
+                        }
+                        // println!("Existential fragment being brute-forced");
+                        // 'Brute force' search for all possible values of the bound variable
+                        for factor in w.generate_factors() {
+                            altered_assignment.insert(var, factor);
+                            let holds = inner.is_satisfying_assignment(w, &altered_assignment);
+                            if holds {
+                                return true;
+                            }
+                        }
+                        false
+                    }
+                }
             }
         }
-        free
     }
 
-    /// The simple atomic case, where the left and right -hand sides are replaced using
-    /// [`substitute`] and compared with simple string comparison
-    fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
-        if !substitution.contains_key(UNIVERSE_CONSTANT) {
-            panic!("Missing universe constant `$U` (𝔲) in substitution")
+    pub fn free_vars(&self) -> Vec<&str> {
+        match self {
+            Formula::Equation { lhs, rhs } => {
+                let mut free = vec![];
+                if *lhs != UNIVERSE_CONSTANT {
+                    free.push(*lhs);
+                }
+
+                for content in rhs {
+                    // if term is a free variable, add to vec if not already there
+                    if let EquationContent::Variable(var) = content
+                        && !free.contains(var)
+                        && *var != UNIVERSE_CONSTANT
+                    {
+                        free.push(*var);
+                    }
+                }
+                free
+            }
+            Formula::Negation { inner } => inner.free_vars(),
+            Formula::Conjunction { fragments } => {
+                let mut free = HashSet::new();
+                for fragment in fragments {
+                    for var in fragment.free_vars() {
+                        free.insert(var);
+                    }
+                }
+                free.into_iter().collect()
+            }
+            Formula::Disjunction { fragments } => {
+                let mut free = HashSet::new();
+                for fragment in fragments {
+                    for var in fragment.free_vars() {
+                        free.insert(var);
+                    }
+                }
+                free.into_iter().collect()
+            }
+            Formula::Quantifier {
+                var,
+                quantifier: _quantifier,
+                inner,
+            } => {
+                let mut free = inner.free_vars();
+                let quantified_var_idx = free.iter().position(|v| v == var).unwrap();
+                free.remove(quantified_var_idx);
+                free
+            }
         }
-        for (key, val) in substitution.iter() {
-            if !universe.contains(val) {
-                panic!(
-                    "Substitution {} for variable {} is not in the universe",
-                    val, key
+    }
+
+    pub fn all_solutions(&'a self, w: &'a CharOperator) -> Vec<Assignment<'a>> {
+        match self {
+            Formula::Equation { lhs, rhs } => {
+                // Ensure that the 'rhs' starts and ends with a variable
+                // We can use the prefix and suffix extracted here to do a quick check on potential
+                // assignments to the lhs variable
+                let (trimmed_rhs, required_prefix, required_suffix) = trim_equation_rhs(rhs);
+                if *lhs == UNIVERSE_CONSTANT {
+                    if !w.as_str().starts_with(&required_prefix)
+                        || !w.as_str().ends_with(&required_suffix)
+                    {
+                        return vec![];
+                    }
+                    let trimmed_universe = &w.as_str()
+                        [required_prefix.len()..w.as_str().len() - required_suffix.len()];
+                    partial_assignments_for_equation(trimmed_universe, trimmed_rhs, w.as_str())
+                } else {
+                    let mut all_assignments = Vec::new();
+                    for lhs_value in w.generate_factors() {
+                        if lhs_value.len() < required_prefix.len() + required_suffix.len() {
+                            continue;
+                        }
+                        if !lhs_value.starts_with(&required_prefix)
+                            || !lhs_value.ends_with(&required_suffix)
+                        {
+                            continue;
+                        }
+                        let trimmed_lhs_value = &lhs_value
+                            [required_prefix.len()..lhs_value.len() - required_suffix.len()];
+                        let assignments = partial_assignments_for_equation(
+                            trimmed_lhs_value,
+                            trimmed_rhs,
+                            w.as_str(),
+                        );
+                        let assignments_for_lhs_value = assignments
+                            .into_iter()
+                            .map(|mut assignment| {
+                                assignment.insert(lhs, lhs_value);
+                                assignment
+                            })
+                            .filter(|assignment| assignment.apply(rhs).join("") == lhs_value)
+                            .collect_vec();
+                        all_assignments.extend(assignments_for_lhs_value);
+                    }
+                    all_assignments
+                }
+            }
+            Formula::Negation { inner } => {
+                // This is brute force
+                let universe = w.generate_factors().collect_vec();
+                let free_vars = inner.free_vars();
+                let values =
+                    std::iter::repeat_n(universe, free_vars.len()).multi_cartesian_product();
+                values
+                    .map(|values| {
+                        let mut ass = Assignment::from_vars(&free_vars, w.as_str());
+                        for i in 0..free_vars.len() {
+                            ass.insert(free_vars[i], values[i])
+                        }
+                        ass
+                    })
+                    .filter(|assignment| !inner.is_satisfying_assignment(w, assignment))
+                    .collect_vec()
+            }
+            Formula::Conjunction { fragments } => {
+                let non_negations = fragments
+                    .iter()
+                    .filter(|f| !matches!(f, Formula::Negation { .. }))
+                    .collect_vec();
+                if non_negations.is_empty() {
+                    // edge case - a conjunction consisting of only negations
+                    let sub_assignments = {
+                        let mut assignments = Vec::with_capacity(fragments.len());
+                        // For all fragments (they are all negations)
+                        for fragment in fragments {
+                            assignments.push(fragment.all_solutions(w))
+                        }
+                        assignments
+                    };
+                    // all satisfying assignments for the conjunction of the negations
+                    find_all_joins(&sub_assignments)
+                } else {
+                    // Find all sat assignments for the conjunction of non-negated sub-formulas
+                    let sub_assignments = {
+                        let mut assignments = Vec::with_capacity(fragments.len());
+                        // For just the non-negations
+                        for fragment in non_negations {
+                            assignments.push(fragment.all_solutions(w))
+                        }
+                        assignments
+                    };
+                    // all satisfying assignments for the conjunction of the non-negative sub-formulas
+                    let sub_solutions = find_all_joins(&sub_assignments);
+                    let negations = fragments
+                        .iter()
+                        .filter(|f| matches!(f, Formula::Negation { .. }))
+                        .collect_vec();
+                    if negations.is_empty() {
+                        sub_solutions
+                    } else {
+                        if sub_solutions.is_empty() {
+                            return sub_solutions;
+                        }
+                        let mut unseen_vars = HashSet::new();
+                        for fragment in &negations {
+                            let fragment_vars = fragment.free_vars();
+                            for var in fragment_vars {
+                                if !sub_solutions[0].keys.contains(&var) {
+                                    unseen_vars.insert(var);
+                                }
+                            }
+                        }
+
+                        let unseen_vars = unseen_vars.into_iter().collect_vec();
+                        if unseen_vars.is_empty() {
+                            sub_solutions
+                                .into_iter()
+                                .filter(|assignment| {
+                                    for fragment in &negations {
+                                        if !fragment.is_satisfying_assignment(w, assignment) {
+                                            return false;
+                                        }
+                                    }
+                                    true
+                                })
+                                .collect_vec()
+                        } else {
+                            let mut satisfying_assignments = Vec::new();
+                            for assignment in &sub_solutions {
+                                let universe = w.generate_factors().collect_vec();
+                                let modified_assignments = Assignment::extend_with_universe(
+                                    assignment,
+                                    &unseen_vars,
+                                    &universe,
+                                );
+
+                                let satisfying_modified_assignments = modified_assignments
+                                    .into_iter()
+                                    .filter(|assignment| {
+                                        for fragment in &fragments[1..] {
+                                            if !fragment.is_satisfying_assignment(w, assignment) {
+                                                return false;
+                                            }
+                                        }
+                                        true
+                                    })
+                                    .collect_vec();
+                                satisfying_assignments.extend(satisfying_modified_assignments);
+                            }
+                            satisfying_assignments
+                        }
+                    }
+                }
+            }
+            Formula::Disjunction { fragments } => {
+                let free_vars: HashSet<&str> = HashSet::from_iter(self.free_vars());
+                let mut satisfying_assignments = HashSet::new();
+                let universe = w.generate_factors().collect_vec();
+                for fragment in fragments {
+                    let fragment_vars = HashSet::from_iter(fragment.free_vars());
+                    let missing_fragment_vars =
+                        free_vars.difference(&fragment_vars).copied().collect_vec();
+                    let fragment_sat_assignments = fragment.all_solutions(w);
+                    let mut extended_fragment_sat_assignments = Vec::new();
+                    for assignment in fragment_sat_assignments {
+                        if missing_fragment_vars.is_empty() {
+                            extended_fragment_sat_assignments.push(assignment);
+                        } else {
+                            let mutated_assignments = Assignment::extend_with_universe(
+                                &assignment,
+                                &missing_fragment_vars,
+                                &universe,
+                            );
+                            extended_fragment_sat_assignments.extend(mutated_assignments);
+                        }
+                    }
+
+                    for assignment in extended_fragment_sat_assignments {
+                        satisfying_assignments.insert(assignment);
+                    }
+                }
+                satisfying_assignments.into_iter().collect_vec()
+            }
+            Formula::Quantifier {
+                var,
+                quantifier,
+                inner,
+            } => match quantifier {
+                Quantifier::Universal => {
+                    let inner_solutions = inner.all_solutions(w);
+                    let mut var_values = HashSet::new();
+                    for solution in &inner_solutions {
+                        let val = solution.value(var);
+                        var_values.insert(val);
+                    }
+                    if var_values.len() != w.count_factors() {
+                        return vec![];
+                    }
+                    inner_solutions
+                        .into_iter()
+                        .map(|mut ass| {
+                            ass.remove_variable(var);
+                            ass
+                        })
+                        .collect_vec()
+                }
+                Quantifier::Existential => {
+                    let inner_solutions = inner.all_solutions(w);
+                    if inner_solutions.is_empty() {
+                        return vec![];
+                    }
+                    // remove the quantified variable
+                    let mut new_solutions = HashSet::with_capacity(inner_solutions.len());
+                    for mut ass in inner_solutions {
+                        ass.remove_variable(var);
+                        new_solutions.insert(ass);
+                    }
+                    new_solutions.into_iter().collect_vec()
+                }
+            },
+        }
+    }
+    /// Determines whether an assignment that is missing values could have values added that
+    /// Satisfy the formula. Used in determining if an assignment to free vars of a quantified
+    /// formula can satisfy the formula without enumerating all values for the bound variable.
+    /// Currently only works for equations and existential quantifiers
+    fn partially_satisfies(&self, partial: &Assignment) -> Option<bool> {
+        enum TempEquationContent {
+            NewConstant(String),
+            Variable(String),
+        }
+        match self {
+            Formula::Equation { lhs, rhs } => {
+                // A new equation where all rhs variables that are in the partial assignment are replaced with their values as constants
+                let mut temp_equation_content = Vec::with_capacity(rhs.len());
+                let bound_var_occurrences = rhs
+                    .iter()
+                    .positions(|c| {
+                        if let EquationContent::Variable(var) = c {
+                            !partial.keys.contains(var)
+                        } else {
+                            false
+                        }
+                    })
+                    .collect_vec();
+
+                // there is no variable missing from the assignment
+                if bound_var_occurrences.is_empty() {
+                    return Some(true);
+                }
+
+                let lhs_assignment = partial.value(lhs);
+
+                // Get name of missing variable
+                // Collect constants AND values of free variables as new constants
+                let mut i = 0;
+                for bound_var_idx in bound_var_occurrences {
+                    let new_const = combine_into_string(&rhs[i..bound_var_idx], &partial);
+                    temp_equation_content.push(TempEquationContent::NewConstant(new_const));
+                    let bound_var = &rhs[bound_var_idx];
+                    if let EquationContent::Variable(var) = bound_var {
+                        temp_equation_content
+                            .push(TempEquationContent::Variable(String::from(*var)));
+                        i = bound_var_idx + 1;
+                    } else {
+                        unreachable!();
+                    }
+                }
+                if i < rhs.len() {
+                    let last_const = combine_into_string(&rhs[i..], &partial);
+                    temp_equation_content.push(TempEquationContent::NewConstant(last_const));
+                }
+
+                // Map to normal system (keeping ownership)
+                let equation_content = temp_equation_content
+                    .iter()
+                    .map(|c| match c {
+                        TempEquationContent::NewConstant(val) => EquationContent::Constant(val),
+                        TempEquationContent::Variable(var) => EquationContent::Variable(var),
+                    })
+                    .collect_vec();
+                // Trim both sides of prefix/suffix consts
+                let (equation_content, pre, suf) = trim_equation_rhs(&equation_content);
+                let trimmed_lhs_assignment = lhs_assignment
+                    .strip_prefix(&pre)
+                    .unwrap()
+                    .strip_suffix(&suf)
+                    .unwrap();
+                // Solve like a 'normal' equation
+                let full_assignments = partial_assignments_for_equation(
+                    trimmed_lhs_assignment,
+                    equation_content,
+                    partial.universe_constant,
                 );
+                Some(!full_assignments.is_empty())
             }
-        }
-
-        let lhs_vec = vec![EquationContent::Variable(self.lhs_variable)];
-        let lhs_sub = substitute(&lhs_vec, substitution).join("");
-        let rhs_sub = substitute(&self.rhs, substitution).join("");
-
-        lhs_sub == rhs_sub
-    }
-}
-
-impl fmt::Display for AtomicWordEquation<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}≐", self.lhs_variable).expect("TODO: panic message");
-        for content in &self.rhs {
-            match content {
-                EquationContent::Variable(v) => {
-                    write!(f, "{} ", v).expect("TODO: panic message");
+            Formula::Negation { .. } => {
+                // println!("Cannot currently optimise for Negation");
+                None
+            }
+            Formula::Conjunction { .. } => {
+                // println!("Cannot currently optimise for Conjunction");
+                None
+            }
+            Formula::Disjunction { .. } => {
+                // println!("Cannot currently optimise for Disjunction");
+                None
+            }
+            Formula::Quantifier {
+                inner,
+                var: _var,
+                quantifier,
+            } => {
+                if matches!(quantifier, Quantifier::Existential) {
+                    inner.partially_satisfies(partial)
+                } else {
+                    // println!("Cannot currently optimise for 'For all'");
+                    None
                 }
-                EquationContent::Constant(c) => {
-                    write!(f, "{:?} ", c).expect("TODO: panic message");
+            }
+        }
+    }
+}
+
+fn combine_into_string(range: &[EquationContent], partial: &Assignment) -> String {
+    let mut new_const = String::new();
+    for p in range {
+        match p {
+            EquationContent::Variable(var) => {
+                new_const.push_str(partial.value(var));
+            }
+            EquationContent::Constant(val) => {
+                new_const.push_str(val);
+            }
+            EquationContent::UniverseConstant => {
+                println!("Universe word on right hand side of optimised equation");
+                new_const.push_str(partial.universe_constant);
+            }
+        }
+    }
+    new_const
+}
+
+#[test]
+fn test_partial_assignment_satisfying() {
+    let formula = Formula::Quantifier {
+        inner: Box::new(Formula::Quantifier {
+            inner: Box::new(Formula::Equation {
+                lhs: "x",
+                rhs: vec![
+                    EquationContent::Variable("p"),
+                    EquationContent::Constant("aaa"),
+                    EquationContent::Variable("s"),
+                ],
+            }),
+            var: "s",
+            quantifier: Quantifier::Existential,
+        }),
+        var: "p",
+        quantifier: Quantifier::Existential,
+    };
+    let universe = "abababababaaaaabb";
+    let mut assignment = Assignment::new(5, universe);
+    assignment.insert("x", "baaaaabb");
+    assert!(formula.partially_satisfies(&assignment).unwrap());
+}
+
+fn trim_equation_rhs<'a, 'b>(
+    rhs: &'a [EquationContent<'b>],
+) -> (&'a [EquationContent<'b>], String, String) {
+    let mut trimmed_rhs = rhs;
+    let first = &trimmed_rhs[0];
+    let mut prefix = String::new();
+    if let EquationContent::Constant(val) = first {
+        trimmed_rhs = &trimmed_rhs[1..];
+        prefix = String::from(*val);
+    }
+    if trimmed_rhs.is_empty() {
+        return (trimmed_rhs, prefix, String::new());
+    }
+
+    let last = &trimmed_rhs[trimmed_rhs.len() - 1];
+    let mut suffix = String::new();
+    if let EquationContent::Constant(val) = last {
+        trimmed_rhs = &trimmed_rhs[..trimmed_rhs.len() - 1];
+        suffix = String::from(*val);
+    }
+    if trimmed_rhs.is_empty() {
+        return (trimmed_rhs, prefix, String::new());
+    }
+
+    if matches!(&trimmed_rhs[0], EquationContent::Constant(_))
+        || matches!(
+            &trimmed_rhs[trimmed_rhs.len() - 1],
+            EquationContent::Constant(_)
+        )
+    {
+        let (inner_trim, inner_prefix, inner_suffix) = trim_equation_rhs(trimmed_rhs);
+        trimmed_rhs = inner_trim;
+        prefix += &*inner_prefix;
+        suffix = inner_suffix + &*suffix;
+    }
+
+    (trimmed_rhs, prefix, suffix)
+}
+
+#[test]
+fn test_trim_equation_rhs() {
+    let rhs = [
+        EquationContent::Constant("aaa"),
+        EquationContent::Constant("bbb"),
+        EquationContent::Variable("x"),
+        EquationContent::Constant("middle"),
+        EquationContent::Variable("y"),
+        EquationContent::Constant("zz"),
+    ];
+    let (trimmed_rhs, prefix, suffix) = trim_equation_rhs(&rhs);
+    println!("{:?}", trimmed_rhs);
+    assert_eq!(prefix, "aaabbb");
+    assert_eq!(suffix, "zz");
+    assert_eq!(trimmed_rhs.len(), 3);
+}
+
+/// It is assumed that `rhs` starts and ends with a variable, otherwise the string `lhs_assignment`
+/// can be trimmed according to the surrounding constants on the rhs
+fn partial_assignments_for_equation<'a>(
+    lhs_assignment: &'a str,
+    rhs: &'a [EquationContent],
+    universe_word: &'a str,
+) -> Vec<Assignment<'a>> {
+    let mut variable_sequences_end_indices = Vec::new();
+    let mut constants = Vec::new();
+    let mut formula_vars = Vec::with_capacity(rhs.len());
+    for component in rhs {
+        match component {
+            EquationContent::Variable(var) => {
+                formula_vars.push(*var);
+            }
+            EquationContent::Constant(val) => {
+                variable_sequences_end_indices.push(formula_vars.len());
+                constants.push(*val);
+            }
+            EquationContent::UniverseConstant => {
+                constants.push(universe_word);
+            }
+        }
+    }
+    variable_sequences_end_indices.push(formula_vars.len());
+
+    // Case: no variables on rhs (hit when lhs is universe constant)
+    if formula_vars.is_empty() {
+        // Not an empty 'set' of assignments, the set containing an empty assignment
+        return vec![Assignment::from_vars(&[], universe_word)];
+    }
+
+    // Case: no constants on rhs
+    if constants.is_empty() {
+        // all possible 'partition' assignments to rhs vars are satisfying, unless a variable appears multiple times
+        let assignments =
+            equation_subsequence_partial_assignments(&formula_vars, lhs_assignment, universe_word)
+                .collect_vec();
+        return assignments;
+    }
+
+    let combined_assignments = equation_assignments(
+        &formula_vars,
+        &variable_sequences_end_indices,
+        &constants,
+        lhs_assignment,
+        universe_word,
+    );
+    let satisfying_assignments = combined_assignments
+        .into_iter()
+        .filter(|assignment| {
+            let applied_str = assignment.apply(rhs).join("");
+            applied_str == lhs_assignment
+        })
+        .collect_vec();
+    satisfying_assignments
+}
+
+/// Returns assignments that satisfy the equation formed by taking the first variable sequence in
+/// defined by `variables` and end indices in `variable_sequence_indices`, then the first constant
+/// in `combined_constants`, and so on, alternating. Assumes pattern starts and ends with a variable.
+///
+/// E.g. x = abc "mn" d
+/// ```
+/// variables = &["a", "b", "c", "d"];
+/// variable_sequence_indices = &[2,3];
+/// ```
+/// ## Parameters
+/// - `variables`: The variables in the equation rhs, in the order they appear
+/// - `variable_sequence_indices`: Indices of `variables` showing the _end_ index of each variable
+///   sequence in the rhs
+fn equation_assignments<'a>(
+    variables: &[&'a str],
+    variable_sequence_indices: &[usize],
+    constants: &Vec<&str>,
+    lhs_assignment: &'a str,
+    universe_word: &'a str,
+) -> Vec<Assignment<'a>> {
+    let mut const_positions = Vec::with_capacity(constants.len());
+    let lhs_chars = CharOperator::new(lhs_assignment);
+    for constant in constants {
+        let positions = lhs_chars.find(constant);
+        const_positions.push((constant.len(), positions));
+    }
+
+    let mut constituent_partial_assignments = Vec::with_capacity(variable_sequence_indices.len());
+
+    let mut var_sequence_start_idx = 0;
+    for (i, &var_sequence_end_idx) in variable_sequence_indices.iter().enumerate() {
+        let possible_start_indices = if i == 0 {
+            vec![0]
+        } else {
+            let (len, indices) = &const_positions[i - 1];
+            indices.iter().map(|i| i + len).collect_vec()
+        };
+        let var_sequence = &variables[var_sequence_start_idx..var_sequence_end_idx];
+        let possible_end_indices = if i == variable_sequence_indices.len() - 1 {
+            &vec![lhs_chars.len()]
+        } else {
+            let (_, indices) = &const_positions[i];
+            indices
+        };
+
+        let partial_assignments = var_sequence_partial_assignment(
+            var_sequence,
+            &lhs_chars,
+            &possible_start_indices,
+            possible_end_indices,
+            universe_word,
+        );
+
+        constituent_partial_assignments.push(partial_assignments);
+        var_sequence_start_idx = var_sequence_end_idx;
+    }
+
+    let combined_assignments = constituent_partial_assignments.into_iter().reduce(|a, b| {
+        let mut assignments = Vec::with_capacity(a.len() * b.len());
+        for assignment_a in &a {
+            for assignment_b in &b {
+                let res = Assignment::join(assignment_a, assignment_b);
+                if let Ok(s) = res {
+                    assignments.push(s);
                 }
             }
         }
-        Ok(())
-    }
+        assignments
+    });
+    combined_assignments.unwrap_or_default()
 }
 
-/// A formula φ∧ψ: the conjunction of two sub-formulas
-#[derive(Debug)]
-pub struct ConjunctiveFormula<'a> {
-    lhs: Box<dyn Formula + 'a>,
-    rhs: Box<dyn Formula + 'a>,
-}
-impl ConjunctiveFormula<'_> {
-    pub fn new<'a>(
-        lhs: Box<dyn Formula + 'a>,
-        rhs: Box<dyn Formula + 'a>,
-    ) -> ConjunctiveFormula<'a> {
-        ConjunctiveFormula { lhs, rhs }
-    }
-}
-
-impl Formula for ConjunctiveFormula<'_> {
-    fn free_vars(&self) -> Vec<&str> {
-        let mut free = vec![];
-        free.extend(self.lhs.free_vars());
-        for var in self.rhs.free_vars() {
-            if !free.contains(&var) {
-                free.push(var);
+/// All assignments to a variable sequence across possible combinations of start/end indices
+/// If it is known that for this sequence of variables V, there are a limited number of possibilities
+/// for where σ(V) falls within the lhs assignment, they can be passed as possible start/end indices here
+fn var_sequence_partial_assignment<'a>(
+    var_sequence: &[&'a str],
+    lhs_assignment: &CharOperator<'a>,
+    possible_start_indices: &Vec<usize>,
+    possible_end_indices: &Vec<usize>,
+    universe_word: &'a str,
+) -> Vec<Assignment<'a>> {
+    let mut partial_assignments = Vec::new();
+    for &start in possible_start_indices {
+        for &end in possible_end_indices {
+            if start <= end {
+                let target_substring = lhs_assignment.substring(start, end);
+                let assignments = equation_subsequence_partial_assignments(
+                    var_sequence,
+                    target_substring,
+                    universe_word,
+                )
+                .collect_vec();
+                partial_assignments.extend(assignments);
             }
         }
-        free
     }
-
-    /// Checks if the substitution holds for _both_ the left and right -hand components of
-    /// the disjunction
-    fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
-        // check substitution holds for lhs and rhs. Contradictions?
-        let lhs_holds = self.lhs.check_substitution(substitution, universe);
-        let rhs_holds = self.rhs.check_substitution(substitution, universe);
-        lhs_holds && rhs_holds
-    }
+    partial_assignments
 }
 
-impl fmt::Display for ConjunctiveFormula<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "({} ∧ {})", self.lhs, self.rhs)
-    }
-}
-
-/// A formula φ∨ψ: the disjunction of two sub-formulas
-#[derive(Debug)]
-pub struct DisjunctiveFormula<'a> {
-    lhs: Box<dyn Formula + 'a>,
-    rhs: Box<dyn Formula + 'a>,
-}
-impl DisjunctiveFormula<'_> {
-    pub fn new<'a>(
-        lhs: Box<dyn Formula + 'a>,
-        rhs: Box<dyn Formula + 'a>,
-    ) -> DisjunctiveFormula<'a> {
-        DisjunctiveFormula { lhs, rhs }
-    }
-}
-
-impl Formula for DisjunctiveFormula<'_> {
-    fn free_vars(&self) -> Vec<&str> {
-        let mut free = vec![];
-        free.extend(self.lhs.free_vars());
-        for var in self.rhs.free_vars() {
-            if !free.contains(&var) {
-                free.push(var);
+/// Finds partial assignments for the variables in `var_sequence` to make the substring
+fn equation_subsequence_partial_assignments<'a>(
+    var_sequence: &[&'a str],
+    lhs_substring: &'a str,
+    universe_word: &'a str,
+) -> impl Iterator<Item = Assignment<'a>> {
+    let lhs_chars = CharOperator::new(lhs_substring);
+    let mut partitioned_values = partition_string(&lhs_chars, var_sequence.len()).into_iter();
+    std::iter::from_fn(move || {
+        loop {
+            let values = partitioned_values.next();
+            if let Some(values) = values {
+                let mut assignment = Assignment::from_vars(var_sequence, universe_word);
+                for i in 0..values.len() {
+                    assignment.insert(var_sequence[i], values[i]);
+                }
+                let content = var_sequence
+                    .iter()
+                    .map(|s| EquationContent::Variable(s))
+                    .collect_vec();
+                if assignment.apply(&content).join("") == lhs_substring {
+                    return Some(assignment);
+                }
+            } else {
+                return None;
             }
         }
-        free
-    }
-
-    /// Checks if the substitution holds for _either_ the left or right -hand components of
-    /// the conjunction
-    fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
-        // check substitution holds for lhs and rhs. Contradictions?
-        let lhs_holds = self.lhs.check_substitution(substitution, universe);
-        let rhs_holds = self.rhs.check_substitution(substitution, universe);
-        lhs_holds || rhs_holds
-    }
+    })
 }
 
-impl fmt::Display for DisjunctiveFormula<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "({} ∨ {})", self.lhs, self.rhs)
-    }
+#[test]
+fn test_new_eq_solver() {
+    let lhs_assignment = "abcdeafa";
+    let sols = partial_assignments_for_equation(
+        &lhs_assignment,
+        &[
+            EquationContent::Variable("q"),
+            EquationContent::Variable("w"),
+            EquationContent::Variable("r"),
+            EquationContent::Constant("a"),
+            EquationContent::Variable("s"),
+        ],
+        "",
+    );
+    print_assignments(&sols, lhs_assignment, lhs_assignment.len());
+
+    let lhs_assignment = "cdababe";
+    let sols = partial_assignments_for_equation(
+        &lhs_assignment,
+        &[
+            EquationContent::Variable("r"),
+            EquationContent::Constant("a"),
+            EquationContent::Variable("s"),
+            EquationContent::Variable("t"),
+            EquationContent::Constant("b"),
+            EquationContent::Variable("u"),
+        ],
+        "",
+    );
+    print_assignments(&sols, lhs_assignment, lhs_assignment.len());
 }
 
-/// A formula ¬φ: the negation of a single sub-formulas
-#[derive(Debug)]
-pub struct NegativeFormula<'a> {
-    inner: Box<dyn Formula + 'a>,
-}
-
-impl NegativeFormula<'_> {
-    pub fn new<'a>(inner: Box<dyn Formula + 'a>) -> NegativeFormula {
-        NegativeFormula { inner }
+fn partition_string<'a>(string: &CharOperator<'a>, num_vars: usize) -> Vec<Vec<&'a str>> {
+    let partition_positions = (0..string.len() + 1).combinations_with_replacement(num_vars - 1);
+    let mut assignments = Vec::with_capacity(partition_positions.try_len().unwrap());
+    for partition_position in partition_positions {
+        let mut partition_position = partition_position;
+        partition_position.insert(0, 0);
+        partition_position.push(string.len());
+        let values = if string.len() == 0 {
+            vec![""; num_vars]
+        } else {
+            string.multi_substring(&partition_position)
+        };
+        assignments.push(values);
     }
-}
-
-impl Formula for NegativeFormula<'_> {
-    fn free_vars(&self) -> Vec<&str> {
-        self.inner.free_vars()
-    }
-
-    /// Simply the negation of the [`Formula::check_substitution`] of the sub-formula
-    fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
-        !self.inner.check_substitution(substitution, universe)
-    }
-}
-
-impl fmt::Display for NegativeFormula<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "¬").expect("TODO: panic message");
-        self.inner.fmt(f)
-    }
-}
-
-/// A formula ∃ x: φ(x): where a single variable is bound by an existential quantifier
-#[derive(Debug)]
-pub struct ExistentialFormula<'a> {
-    inner: Box<dyn Formula + 'a>,
-    bound_var: &'a str,
-}
-
-impl<'a> ExistentialFormula<'a> {
-    pub fn new(bound_var: &'a str, inner_formula: Box<dyn Formula + 'a>) -> Self {
-        ExistentialFormula {
-            inner: inner_formula,
-            bound_var,
-        }
-    }
-}
-
-impl Formula for ExistentialFormula<'_> {
-    fn free_vars(&self) -> Vec<&str> {
-        let inner_free = self.inner.free_vars();
-        let mut free = Vec::with_capacity(inner_free.len());
-        for var in inner_free {
-            if var != self.bound_var {
-                free.push(var);
-            }
-        }
-        free
-    }
-
-    /// Checks a [`Substitution`] by calling [`generate_factors`] on the universe constant given
-    /// in the substitution, and for each possible value to assign to the bound variable _x_, a
-    /// new substitution is checked on the inner [`Formula::check_substitution`], returning
-    /// `true` when the first valid substitution is found
-    fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
-        let mut altered_substitution = substitution.clone();
-        for factor in universe {
-            altered_substitution.insert(self.bound_var, factor);
-            let holds = self
-                .inner
-                .check_substitution(&altered_substitution, universe);
-            if holds {
-                return true;
-            }
-        }
-        false
-    }
-}
-
-impl fmt::Display for ExistentialFormula<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let _ = write!(f, "∃{x}: (", x = self.bound_var);
-        let _ = self.inner.fmt(f);
-        write!(f, ")")
-    }
-}
-
-/// A formula ∀ x: φ(x): where a single variable is bound by a universal quantifier
-#[derive(Debug)]
-pub struct UniversalFormula<'a> {
-    inner: Box<dyn Formula + 'a>,
-    bound_var: &'a str,
-}
-
-impl<'a> UniversalFormula<'a> {
-    pub fn new(bound_var: &'a str, inner_formula: Box<dyn Formula + 'a>) -> Self {
-        UniversalFormula {
-            inner: inner_formula,
-            bound_var,
-        }
-    }
-}
-
-impl Formula for UniversalFormula<'_> {
-    fn free_vars(&self) -> Vec<&str> {
-        let inner_free = self.inner.free_vars();
-        let mut free = Vec::with_capacity(inner_free.len());
-        for var in inner_free {
-            if var != self.bound_var {
-                free.push(var);
-            }
-        }
-        free
-    }
-
-    /// Checks a [`Substitution`] by calling [`generate_factors`] on the universe constant given
-    /// in the substitution, and for each possible value to assign to the bound variable _x_, a
-    /// new substitution is checked on the inner [`Formula::check_substitution`], returning
-    /// `true` if every new substitution holds
-    fn check_substitution(&self, substitution: &Substitution, universe: &[&str]) -> bool {
-        let universe_word = substitution[UNIVERSE_CONSTANT];
-        let all_factors = generate_factors(universe_word);
-        let mut altered_substitution = substitution.clone();
-        for factor in all_factors {
-            altered_substitution.insert(self.bound_var, factor);
-            let holds = self
-                .inner
-                .check_substitution(&altered_substitution, universe);
-            if holds {
-                return false;
-            }
-        }
-        true
-    }
-}
-
-impl fmt::Display for UniversalFormula<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let _ = write!(f, "∀{x}: (", x = self.bound_var);
-        let _ = self.inner.fmt(f);
-        write!(f, ")")
-    }
+    assignments
 }
