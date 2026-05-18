@@ -43,8 +43,6 @@ Found 0 solutions
 No satisfying assignments found
 ```
 
-s
-
 # Formula Syntax
 
 ## Variables
