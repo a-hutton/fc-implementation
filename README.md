@@ -24,6 +24,14 @@ The available options:
 | `--quiet`        | `-q`      |                | Operates the program in 'quiet' mode, where limited outputs are printed to the console (e.g. the number of assignments, rather than the whole list)                                                                                                                                                     |
 | `--column-width` |           | `<VALUE>`      | Limits the width of each column of assignments when printing to the console (default = 30)                                                                                                                                                                                                              |
 
+## Important Note For Windows
+
+Windows handles string arguments in both CMD and PowerShell very differently than other shells.
+This is a particular issue as the program requires quotes in the formula strings.
+To get around this, **constants in formulas in Windows must be escaped**.
+
+For example, instead of `-p 'z = x "ab" y`, Windows requires that you run `-p 'z = x \"ab\" y'`.
+
 ## Example
 
 The program can be used to find if the word `abcdabcd` is a square:
