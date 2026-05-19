@@ -15,7 +15,7 @@ The compiled executable file can be run `$ ./fc <options>`.
 The available options:
 
 | Full Option      | Shorthand | argument       | Description                                                                                                                                                                                                                                                                                             |
-| ---------------- | --------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|------------------|-----------|----------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `--help`         | `-h`      |                | Print the help text, showing program usage                                                                                                                                                                                                                                                              |
 | `--command`      | `-c`      | `<COMMAND>`    | Change the operation of the program. The available options are `find-solutions` (default), which finds all satisfying assignments for the given formula and word; `check-assignment`, which checks if a given assignment is satisfying; `generate-factors`, which generates all factors of a given word |
 | `--pattern`      | `-p`      | `<FORMULA>`    | The formula passed to the solver                                                                                                                                                                                                                                                                        |
@@ -43,7 +43,7 @@ Windows, which is included in most Git installations.
 The program can be used to find if the word `abcdabcd` is a square:
 
 ```bash
-./fc --pattern '$U = x x' --text 'abcdabcd'
+fc --pattern '$U = x x' --text 'abcdabcd'
 Found 1 solutions
 x
 abcd
@@ -52,7 +52,7 @@ abcd
 And to find that the word `abcdef` is not a square:
 
 ```bash
-./fc --pattern '$U = x x' --text 'abcdef'
+fc --pattern '$U = x x' --text 'abcdef'
 Found 0 solutions
 No satisfying assignments found
 ```
@@ -131,10 +131,10 @@ The executable is in the `./target/release/` directory.
 During development, several branches were created for the purpose of testing
 different implementations of FC. They were given names reflecting which
 iteration of development, or optimisation was used, for ease of development. The
-acronyms and desciptions are as follows:
+acronyms and descriptions are as follows:
 
 | Name              | Meaning                   | Description                                                                                                |
-| ----------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------- |
+|-------------------|---------------------------|------------------------------------------------------------------------------------------------------------|
 | `ft`              | Factor Trimming           | In the brute-force approach, heuristics are applied to 'trim' universe of assignments                      |
 | `nuc`             | No Universe Check         | In the brute-force approach, assignments to variables are not checked for membership of the universe       |
 | `lcp`             | Longest Common Prefix     | LCP arrays and suffix arrays are used to generate the set of factors                                       |
@@ -143,3 +143,8 @@ acronyms and desciptions are as follows:
 | `nohash`          | No hash maps              | Hash maps are not used to store assignments. All `groundup` approaches use this                            |
 | `fxhash`, `ahash` | The respective crates     | Alternative hash maps for representing assignments                                                         |
 | `groundup`        | The second implementation | As opposed to iterating on the brute-force implementation, a new approach was created 'from the ground up' |
+| `enum`            | Rust Enums                | Instead of the initial `trait` approach, uses the `enum` for formulas                                      |
+
+Branches with names starting `groundup` are a iterations of the 'new' implementation.
+All other branches are iterations of the brute-force implementation.
+The best brute-force implementation is `ft-nuc-nohash-lcp-enum`
