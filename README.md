@@ -71,6 +71,10 @@ quotes can be escaped in literals by prefixing them with a backslash `\"`, but
 **the universe word must also have the quotes expected escaped for them to
 match**.
 
+## The Universe Constant
+
+Represented as the 'special variable' `$U`.
+
 ## Word Equations
 
 A word equation is a single variable, then an ASCII 'equals' character `=`, then
